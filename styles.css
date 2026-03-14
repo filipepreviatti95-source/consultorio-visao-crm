@@ -535,7 +535,8 @@ input, select, textarea { font-family: inherit; }
 /* ═══════════════════════════════════════════════════════
    MAIN CONTENT / PAGES
 ══════════════════════════════════════════════════════ */
-.main-content { flex: 1; padding: 1.75rem 1.5rem; }
+.main-content { flex: 1; padding: 1.75rem 1.5rem; overflow-x: hidden; min-width: 0; }
+.main-wrapper { min-width: 0; overflow-x: hidden; }
 
 .page { display: none; }
 .page.active { display: block; animation: fadeIn .2s ease; }
@@ -588,10 +589,19 @@ input, select, textarea { font-family: inherit; }
 /* Métricas */
 .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
+.metrics-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.metric-card-highlight {
+  border-color: #F59E0B !important;
+  box-shadow: 0 0 0 2px rgba(245,158,11,.15), var(--shadow-sm) !important;
+}
+.upcoming-atrasado { background: rgba(239,68,68,.05); border-left: 3px solid #EF4444; }
+.upcoming-status-icon { display: flex; align-items: center; margin-right: .25rem; }
 
 .metric-card {
   background: var(--bg-card);
@@ -603,7 +613,10 @@ input, select, textarea { font-family: inherit; }
   gap: 1rem;
   box-shadow: var(--shadow-sm);
   transition: box-shadow var(--trans-fast), transform var(--trans-fast), background var(--trans-base);
+  min-width: 0;
+  overflow: hidden;
 }
+.metric-info { min-width: 0; overflow: hidden; }
 .metric-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
 
 .metric-icon {
@@ -614,8 +627,8 @@ input, select, textarea { font-family: inherit; }
 }
 .metric-icon svg { width: 22px; height: 22px; }
 
-.metric-info { display: flex; flex-direction: column; }
-.metric-label { font-size: .78rem; color: var(--text-secondary); font-weight: 500; }
+.metric-info { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.metric-label { font-size: .78rem; color: var(--text-secondary); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .metric-value {
   font-size: 1.75rem;
   font-weight: 800;
@@ -626,7 +639,7 @@ input, select, textarea { font-family: inherit; }
 /* Dashboard grid */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 1.25rem;
 }
 
@@ -1497,7 +1510,8 @@ input, select, textarea { font-family: inherit; }
 
 /* Tablets */
 @media (max-width: 1100px) {
-  .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+  .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metrics-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-grid { grid-template-columns: 1fr; }
 }
 
@@ -1525,7 +1539,7 @@ input, select, textarea { font-family: inherit; }
 
   .main-content { padding: 1rem; }
 
-  .metrics-grid { grid-template-columns: repeat(2, 1fr); gap: .65rem; }
+  .metrics-grid, .metrics-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
   .metric-value { font-size: 1.4rem; }
 
   .kanban-board { gap: .75rem; }

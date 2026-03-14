@@ -833,7 +833,6 @@ function handleConversaInsert(payload) {
 ══════════════════════════════════════════════════════ */
 
 async function loadDashboard() {
-  // Carrega dados em paralelo
   await Promise.all([
     fetchPacientes(),
     fetchAgendamentos(),
@@ -841,6 +840,7 @@ async function loadDashboard() {
   ]);
   renderDashboardMetrics();
   renderDashboardBarChart();
+  renderAtenderHoje();
   renderDashboardAgendamentos();
   renderDashboardFeed();
 }
@@ -862,30 +862,61 @@ async function fetchAgendamentos() {
 }
 
 async function fetchConversasRecentes() {
+  // Busca mais registros para garantir que após agrupamento tenhamos 12 conversas distintas
   const { data, error } = await db
     .from('conversas')
     .select('*, pacientes(nome, telefone)')
+    .eq('remetente', 'paciente')           // só mensagens DO paciente (não da IA)
     .order('created_at', { ascending: false })
-    .limit(20);
-  if (!error) State.conversasRecentes = data || [];
+    .limit(60);
+  if (error) return;
+
+  // Agrupa por paciente: mantém só a mensagem mais recente de cada telefone/paciente_id
+  const vistas = new Set();
+  const unicas = [];
+  for (const conv of (data || [])) {
+    const chave = conv.paciente_id || conv.telefone || conv.id;
+    if (!vistas.has(chave)) {
+      vistas.add(chave);
+      unicas.push(conv);
+    }
+    if (unicas.length >= 12) break;
+  }
+  State.conversasRecentes = unicas;
 }
 
 function renderDashboardMetrics() {
-  const hoje  = new Date();
-  const hojeStr = hoje.toISOString().slice(0, 10);
+  const hoje     = new Date();
+  const hojeStr  = hoje.toISOString().slice(0, 10);
 
-  // Total pacientes
-  document.getElementById('metric-total').textContent = State.pacientes.length;
-  document.getElementById('metric-total').classList.remove('skeleton');
+  // ── Total pacientes
+  setMetric('metric-total', State.pacientes.length);
 
-  // Agendamentos hoje
+  // ── Consultas hoje (todos menos cancelado)
   const agHoje = State.agendamentos.filter(a =>
     a.data_hora && a.data_hora.slice(0, 10) === hojeStr && a.status !== 'cancelado'
-  ).length;
-  document.getElementById('metric-hoje').textContent = agHoje;
-  document.getElementById('metric-hoje').classList.remove('skeleton');
+  );
+  setMetric('metric-hoje', agHoje.length);
+  // Destaque visual se tiver consultas hoje
+  const cardHoje = document.getElementById('metric-card-hoje');
+  if (cardHoje) cardHoje.classList.toggle('metric-card-highlight', agHoje.length > 0);
 
-  // Confirmados na semana
+  // ── Não atendidos hoje: agendado ou confirmado e horário já passou
+  const naoAtendidos = agHoje.filter(a => {
+    const d = new Date(a.data_hora);
+    return d < hoje && (a.status === 'agendado' || a.status === 'confirmado');
+  }).length;
+  setMetric('metric-nao-atendidos', naoAtendidos);
+
+  // ── Novos contatos nos últimos 7 dias
+  const seteDiasAtras = new Date(hoje);
+  seteDiasAtras.setDate(hoje.getDate() - 7);
+  const novos7d = State.pacientes.filter(p => {
+    return p.status === 'novo_contato' && new Date(p.created_at) >= seteDiasAtras;
+  }).length;
+  setMetric('metric-novos', novos7d);
+
+  // ── Semana atual
   const inicioSemana = new Date(hoje);
   inicioSemana.setDate(hoje.getDate() - hoje.getDay());
   inicioSemana.setHours(0, 0, 0, 0);
@@ -897,27 +928,37 @@ function renderDashboardMetrics() {
     const d = new Date(a.data_hora);
     return a.status === 'confirmado' && d >= inicioSemana && d <= fimSemana;
   }).length;
-  document.getElementById('metric-confirmados').textContent = confirmados;
-  document.getElementById('metric-confirmados').classList.remove('skeleton');
+  setMetric('metric-confirmados', confirmados);
 
-  // Concluídos no mês
+  // ── Concluídos no mês
   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
   const concluidos = State.agendamentos.filter(a => {
     const d = new Date(a.data_hora);
     return a.status === 'concluido' && d >= inicioMes;
   }).length;
-  document.getElementById('metric-concluidos').textContent = concluidos;
-  document.getElementById('metric-concluidos').classList.remove('skeleton');
+  setMetric('metric-concluidos', concluidos);
 
-  // Badge de novos contatos no menu
+  // ── Cancelados na semana
+  const cancelados = State.agendamentos.filter(a => {
+    const d = new Date(a.data_hora);
+    return a.status === 'cancelado' && d >= inicioSemana && d <= fimSemana;
+  }).length;
+  setMetric('metric-cancelados', cancelados);
+
+  // ── Badge menu
   const novosCount = State.pacientes.filter(p => p.status === 'novo_contato').length;
   const badgeEl    = document.getElementById('badge-novos');
-  if (novosCount > 0) {
+  if (badgeEl) {
     badgeEl.textContent = novosCount;
-    badgeEl.style.display = '';
-  } else {
-    badgeEl.style.display = 'none';
+    badgeEl.style.display = novosCount > 0 ? '' : 'none';
   }
+}
+
+function setMetric(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = value;
+  el.classList.remove('skeleton');
 }
 
 function renderDashboardBarChart() {
@@ -959,6 +1000,52 @@ function renderDashboardBarChart() {
         <div class="bar-label">${label}</div>
       </div>`;
   }).join('');
+}
+
+function renderAtenderHoje() {
+  const container = document.getElementById('atender-hoje-list');
+  if (!container) return;
+  const hoje    = new Date();
+  const hojeStr = hoje.toISOString().slice(0, 10);
+
+  const lista = State.agendamentos
+    .filter(a => a.data_hora && a.data_hora.slice(0, 10) === hojeStr && a.status !== 'cancelado')
+    .sort((a, b) => new Date(a.data_hora) - new Date(b.data_hora));
+
+  if (lista.length === 0) {
+    container.innerHTML = `<div class="empty-state"><p>Nenhuma consulta para hoje 🎉</p></div>`;
+    return;
+  }
+
+  container.innerHTML = lista.map(ag => {
+    const passou = new Date(ag.data_hora) < hoje;
+    const statusIcon = ag.status === 'concluido'
+      ? `<svg viewBox="0 0 24 24" fill="none" stroke="#00A86B" stroke-width="2.5" width="16" height="16"><polyline points="20 6 9 17 4 12"/></svg>`
+      : ag.status === 'cancelado'
+        ? `<svg viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.5" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
+        : passou
+          ? `<svg viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2.5" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`
+          : `<svg viewBox="0 0 24 24" fill="none" stroke="#0066CC" stroke-width="2.5" width="16" height="16"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+
+    return `
+      <div class="upcoming-item ${passou && ag.status === 'agendado' ? 'upcoming-atrasado' : ''}"
+           data-paciente-id="${ag.paciente_id || ''}">
+        <span class="upcoming-time">${fmtHora(ag.data_hora)}</span>
+        <div class="upcoming-info">
+          <div class="upcoming-name">${esc(ag.nome_paciente)}</div>
+          <div class="upcoming-phone">${esc(ag.telefone)}</div>
+        </div>
+        <span class="upcoming-status-icon">${statusIcon}</span>
+        <span class="status-pill status-${ag.status}">${STATUS_LABEL[ag.status] || ag.status}</span>
+      </div>`;
+  }).join('');
+
+  container.querySelectorAll('.upcoming-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const paciente = State.pacientes.find(p => p.id === item.dataset.pacienteId);
+      if (paciente) openChatPanel(paciente);
+    });
+  });
 }
 
 function renderDashboardAgendamentos() {
@@ -1645,6 +1732,24 @@ function openModalAgendamento(ag) {
   }, 50);
 }
 
+const GCAL_WEBHOOK = 'https://n8n.srv1474226.hstgr.cloud/webhook/gcal-sync';
+
+async function sincronizarGcal({ acao, googleEventId, nome, telefone, dataHora, obs, status }) {
+  try {
+    const res = await fetch(GCAL_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao, eventId: googleEventId || null, nome, telefone, dataHora, obs, status }),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.googleEventId || null;
+  } catch {
+    // gcal sync é best-effort; não bloqueia o save
+    return null;
+  }
+}
+
 async function salvarAgendamento(id) {
   const nome       = document.getElementById('ma-nome').value.trim();
   const telefone   = document.getElementById('ma-telefone').value.trim();
@@ -1658,10 +1763,16 @@ async function salvarAgendamento(id) {
     return;
   }
 
+  const dataHoraISO = new Date(dataHora).toISOString();
+
+  // Busca google_event_id existente (se for edição)
+  const agExistente = id ? State.agendamentos.find(a => a.id === id) : null;
+  const googleEventIdAtual = agExistente?.google_event_id || null;
+
   const payload = {
     nome_paciente: nome,
     telefone,
-    data_hora:     new Date(dataHora).toISOString(),
+    data_hora:     dataHoraISO,
     status,
     observacoes:   obs || null,
     paciente_id:   pacienteId,
@@ -1669,22 +1780,51 @@ async function salvarAgendamento(id) {
   };
 
   try {
+    let savedData;
     if (id) {
       const { data, error } = await db.from('agendamentos').update(payload).eq('id', id).select().single();
       if (error) throw error;
+      savedData = data;
       const idx = State.agendamentos.findIndex(a => a.id === id);
       if (idx >= 0) State.agendamentos[idx] = data;
       toast('Agendamento atualizado!', 'success');
     } else {
       const { data, error } = await db.from('agendamentos').insert(payload).select().single();
       if (error) throw error;
+      savedData = data;
       State.agendamentos.push(data);
       toast('Agendamento criado!', 'success');
     }
+
     closeModal();
     renderAgendamentos();
     renderDashboardAgendamentos();
     renderDashboardMetrics();
+
+    // Sincroniza com Google Calendar (async, não bloqueia UI)
+    const acaoGcal = status === 'cancelado' ? 'cancelar' : (id ? 'atualizar' : 'criar');
+    sincronizarGcal({
+      acao: acaoGcal,
+      googleEventId: googleEventIdAtual,
+      nome,
+      telefone,
+      dataHora: dataHoraISO,
+      obs,
+      status,
+    }).then(gEventId => {
+      if (gEventId && savedData?.id) {
+        // Salva o google_event_id de volta no Supabase silenciosamente
+        db.from('agendamentos')
+          .update({ google_event_id: gEventId })
+          .eq('id', savedData.id)
+          .then(({ error }) => {
+            if (!error) {
+              const idx = State.agendamentos.findIndex(a => a.id === savedData.id);
+              if (idx >= 0) State.agendamentos[idx].google_event_id = gEventId;
+            }
+          });
+      }
+    });
   } catch (err) {
     toast(`Erro: ${err.message}`, 'error');
   }
