@@ -784,6 +784,13 @@ function handleConversaInsert(payload) {
   const nova = payload.new;
   State.conversas.push(nova);
 
+  // Notificação sonora para novas mensagens de pacientes
+  if (nova.remetente === 'paciente') {
+    playNotificationSound();
+    const nomePaciente = State.pacientes.find(p => p.id === nova.paciente_id)?.nome || nova.telefone || 'Paciente';
+    toast(`Nova mensagem de ${nomePaciente}`, 'info');
+  }
+
   // Se o chat aberto é do mesmo paciente, atualiza
   // Verifica por paciente_id OU por telefone (para conversas do n8n sem paciente_id)
   if (State.currentChatPaciente) {
@@ -1834,7 +1841,163 @@ async function salvarAgendamento(id) {
 window.openModalAgendamento = openModalAgendamento;
 
 /* ═══════════════════════════════════════════════════════
-   19. ENTRY POINT — DOMContentLoaded
+   19. NOTIFICAÇÃO SONORA
+══════════════════════════════════════════════════════ */
+
+/**
+ * Toca um som curto de notificação usando Web Audio API
+ * Sem dependência de arquivos externos
+ */
+function playNotificationSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.4);
+  } catch (e) { /* silencioso se AudioContext não disponível */ }
+}
+
+/* ═══════════════════════════════════════════════════════
+   20. FILTRO DE DATAS & EXPORTAR CSV — AGENDAMENTOS
+══════════════════════════════════════════════════════ */
+
+/**
+ * Filtra agendamentos por intervalo de datas customizado
+ */
+function filtrarAgendamentosPorData() {
+  const dataIni = document.getElementById('filtro-data-inicio')?.value;
+  const dataFim = document.getElementById('filtro-data-fim')?.value;
+  if (!dataIni || !dataFim) {
+    toast('Selecione as duas datas para filtrar', 'error');
+    return;
+  }
+  const inicio = new Date(dataIni + 'T00:00:00');
+  const fim = new Date(dataFim + 'T23:59:59');
+  if (inicio > fim) {
+    toast('Data inicial deve ser anterior à data final', 'error');
+    return;
+  }
+
+  const filtrados = State.agendamentos
+    .filter(a => {
+      const d = new Date(a.data_hora);
+      return d >= inicio && d <= fim;
+    })
+    .sort((a, b) => new Date(a.data_hora) - new Date(b.data_hora));
+
+  const container = document.getElementById('agendamentos-container');
+  const labelEl = document.getElementById('semana-label');
+  labelEl.textContent = `${fmtData(inicio)} – ${fmtData(fim)} (${filtrados.length} resultados)`;
+
+  if (filtrados.length === 0) {
+    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted)">Nenhum agendamento no período selecionado</div>';
+    return;
+  }
+
+  // Agrupa por dia
+  const porDia = {};
+  filtrados.forEach(ag => {
+    const dia = new Date(ag.data_hora);
+    dia.setHours(0, 0, 0, 0);
+    const key = dia.toISOString();
+    if (!porDia[key]) porDia[key] = { dia, ags: [] };
+    porDia[key].ags.push(ag);
+  });
+
+  const html = Object.values(porDia).map(({ dia, ags }) => {
+    const diaLabel = dia.toLocaleDateString('pt-BR', {
+      weekday: 'long', day: '2-digit', month: 'long', timeZone: 'America/Sao_Paulo'
+    });
+    return `
+      <div class="dia-group">
+        <div class="dia-label">${diaLabel}</div>
+        ${ags.map(ag => buildAgendamentoRow(ag)).join('')}
+      </div>`;
+  }).join('');
+
+  container.innerHTML = html;
+  container.querySelectorAll('.agendamento-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const ag = State.agendamentos.find(a => a.id === row.dataset.id);
+      if (ag) openModalAgendamento(ag);
+    });
+  });
+}
+
+/**
+ * Exporta agendamentos visíveis para CSV
+ */
+function exportarAgendamentosCSV() {
+  // Determina quais agendamentos exportar (da semana atual ou filtro ativo)
+  const labelEl = document.getElementById('semana-label');
+  let agExport;
+
+  if (labelEl.textContent.includes('resultados')) {
+    // Filtro customizado ativo — pega os que estão renderizados
+    const dataIni = document.getElementById('filtro-data-inicio')?.value;
+    const dataFim = document.getElementById('filtro-data-fim')?.value;
+    if (dataIni && dataFim) {
+      const inicio = new Date(dataIni + 'T00:00:00');
+      const fim = new Date(dataFim + 'T23:59:59');
+      agExport = State.agendamentos.filter(a => {
+        const d = new Date(a.data_hora);
+        return d >= inicio && d <= fim;
+      });
+    } else {
+      agExport = State.agendamentos;
+    }
+  } else {
+    // Semana atual
+    const { inicio, fim } = getSemanaAtual();
+    agExport = State.agendamentos.filter(a => {
+      const d = new Date(a.data_hora);
+      return d >= inicio && d <= fim;
+    });
+  }
+
+  agExport.sort((a, b) => new Date(a.data_hora) - new Date(b.data_hora));
+
+  if (agExport.length === 0) {
+    toast('Nenhum agendamento para exportar', 'error');
+    return;
+  }
+
+  const headers = ['Data', 'Hora', 'Paciente', 'Telefone', 'Status', 'Observacoes'];
+  const rows = agExport.map(ag => [
+    fmtData(ag.data_hora),
+    fmtHora(ag.data_hora),
+    (ag.nome_paciente || '').replace(/"/g, '""'),
+    (ag.telefone || '').replace(/"/g, '""'),
+    ag.status || '',
+    (ag.observacoes || '').replace(/"/g, '""').replace(/\n/g, ' ')
+  ]);
+
+  const csvContent = [headers.join(';'), ...rows.map(r => r.map(c => `"${c}"`).join(';'))].join('\n');
+  const BOM = '\uFEFF'; // Para Excel reconhecer UTF-8
+  const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `agendamentos_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV exportado com sucesso!', 'success');
+}
+
+// Expõe funções globalmente
+window.filtrarAgendamentosPorData = filtrarAgendamentosPorData;
+window.exportarAgendamentosCSV = exportarAgendamentosCSV;
+
+/* ═══════════════════════════════════════════════════════
+   21. ENTRY POINT — DOMContentLoaded
 ══════════════════════════════════════════════════════ */
 
 document.addEventListener('DOMContentLoaded', () => {
