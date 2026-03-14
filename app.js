@@ -610,18 +610,46 @@ function closeChatPanel() {
 }
 
 async function loadConversas(pacienteId) {
-  const { data, error } = await db
+  // Busca o paciente para obter o telefone (para fallback)
+  const paciente = State.currentChatPaciente;
+  const telefone = paciente?.telefone || '';
+
+  // Busca por paciente_id
+  const { data: byId, error: errById } = await db
     .from('conversas')
     .select('*')
     .eq('paciente_id', pacienteId)
     .order('created_at', { ascending: true });
 
-  if (error) {
+  // Busca por telefone (para conversas sem paciente_id, ex: vindas do n8n)
+  // Normaliza: remove o DDI 55 se o telefone tiver 13 dígitos (ex: 554899249063 → 4899249063)
+  const nums = telefone.replace(/\D/g, '');
+  const telefoneSemDDI = nums.startsWith('55') && nums.length >= 12 ? nums.slice(2) : nums;
+  const telefoneComDDI = nums.startsWith('55') ? nums : '55' + nums;
+
+  const { data: byTelefone, error: errByTel } = await db
+    .from('conversas')
+    .select('*')
+    .or(`telefone.eq.${nums},telefone.eq.${telefoneSemDDI},telefone.eq.${telefoneComDDI}`)
+    .is('paciente_id', null)
+    .order('created_at', { ascending: true });
+
+  if (errById && errByTel) {
     toast('Erro ao carregar conversas', 'error');
     return;
   }
 
-  State.conversas = data || [];
+  // Mescla e deduplica por id
+  const todas = [...(byId || []), ...(byTelefone || [])];
+  const vistas = new Set();
+  const unicas = todas.filter(c => {
+    if (vistas.has(c.id)) return false;
+    vistas.add(c.id);
+    return true;
+  });
+  unicas.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+  State.conversas = unicas;
   renderChatMessages(State.conversas);
 }
 
@@ -757,21 +785,44 @@ function handleConversaInsert(payload) {
   State.conversas.push(nova);
 
   // Se o chat aberto é do mesmo paciente, atualiza
-  if (State.currentChatPaciente && nova.paciente_id === State.currentChatPaciente.id) {
-    renderChatMessages(State.conversas);
+  // Verifica por paciente_id OU por telefone (para conversas do n8n sem paciente_id)
+  if (State.currentChatPaciente) {
+    const p = State.currentChatPaciente;
+    const nums = (p.telefone || '').replace(/\D/g, '');
+    const novaNums = (nova.telefone || '').replace(/\D/g, '');
+    const mesmoId = nova.paciente_id === p.id;
+    const mesmoTel = novaNums && nums && (novaNums.endsWith(nums) || nums.endsWith(novaNums));
+    if (mesmoId || mesmoTel) {
+      renderChatMessages(State.conversas);
+    }
   }
 
   // Atualiza feed no dashboard
   if (State.currentPage === 'dashboard') renderDashboardFeed();
 
-  // Badge de nova mensagem no kanban
-  const card = document.querySelector(`.kanban-card[data-id="${nova.paciente_id}"]`);
-  if (card) {
-    let badge = card.querySelector('.card-new-msg-badge');
+  // Badge de nova mensagem no kanban — por paciente_id ou por telefone
+  let cardEl = nova.paciente_id
+    ? document.querySelector(`.kanban-card[data-id="${nova.paciente_id}"]`)
+    : null;
+
+  if (!cardEl && nova.telefone) {
+    const novaNums = nova.telefone.replace(/\D/g, '');
+    State.pacientes.forEach(p => {
+      if (!cardEl) {
+        const pNums = (p.telefone || '').replace(/\D/g, '');
+        if (novaNums.endsWith(pNums) || pNums.endsWith(novaNums)) {
+          cardEl = document.querySelector(`.kanban-card[data-id="${p.id}"]`);
+        }
+      }
+    });
+  }
+
+  if (cardEl) {
+    let badge = cardEl.querySelector('.card-new-msg-badge');
     if (!badge) {
       badge = document.createElement('span');
       badge.className = 'card-new-msg-badge';
-      card.querySelector('.card-meta')?.appendChild(badge);
+      cardEl.querySelector('.card-meta')?.appendChild(badge);
     }
     badge.textContent = '● Nova msg';
   }
