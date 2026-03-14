@@ -1,0 +1,19 @@
+# Dependências
+node_modules/
+
+# Credenciais (NUNCA commitar)
+.env
+.env.local
+*.secret
+credentials*.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Workflow JSONs locais (contêm credenciais)
+*-workflow-*.json
