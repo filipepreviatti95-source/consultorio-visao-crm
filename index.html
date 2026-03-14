@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Consultório Visão — CRM</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Supabase JS v2 via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Configuração do Supabase (substitua as variáveis no arquivo) -->
+  <script src="supabase-config.js"></script>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     TELA DE LOGIN
+════════════════════════════════════════════ -->
+<div id="login-screen" class="login-screen hidden">
+  <div class="login-card">
+    <div class="login-logo">
+      <!-- Ícone de olho SVG inline -->
+      <svg class="logo-icon" viewBox="0 0 64 40" xmlns="http://www.w3.org/2000/svg">
+        <path d="M32 4C16 4 4 20 4 20s12 16 28 16 28-16 28-16S48 4 32 4z" fill="none" stroke="#0066CC" stroke-width="3.5" stroke-linejoin="round"/>
+        <circle cx="32" cy="20" r="8" fill="#0066CC"/>
+        <circle cx="32" cy="20" r="4" fill="#ffffff"/>
+        <circle cx="34" cy="18" r="1.5" fill="#0066CC"/>
+      </svg>
+      <div class="login-logo-text">
+        <span class="logo-title">Consultório Visão</span>
+        <span class="logo-subtitle">Tijucas — SC</span>
+      </div>
+    </div>
+
+    <h2 class="login-heading">Bem-vindo de volta</h2>
+    <p class="login-desc">Acesse o painel de gestão do consultório</p>
+
+    <form id="login-form" class="login-form">
+      <div class="form-group">
+        <label for="login-email">E-mail</label>
+        <input type="email" id="login-email" placeholder="seu@email.com" required autocomplete="email" />
+      </div>
+      <div class="form-group">
+        <label for="login-password">Senha</label>
+        <div class="input-password-wrap">
+          <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password" />
+          <button type="button" class="toggle-password" aria-label="Mostrar senha">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="login-error" class="login-error hidden"></div>
+      <button type="submit" class="btn btn-primary btn-full" id="login-btn">
+        <span class="btn-text">Entrar</span>
+        <span class="btn-loading hidden">
+          <svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+          Entrando…
+        </span>
+      </button>
+    </form>
+
+    <p class="login-footer">CRM v1.0 — Consultório Visão &copy; 2025</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     APP PRINCIPAL (após login)
+════════════════════════════════════════════ -->
+<div id="app" class="app hidden">
+
+  <!-- ── SIDEBAR ── -->
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <svg class="logo-icon-sm" viewBox="0 0 64 40" xmlns="http://www.w3.org/2000/svg">
+          <path d="M32 4C16 4 4 20 4 20s12 16 28 16 28-16 28-16S48 4 32 4z" fill="none" stroke="#fff" stroke-width="3.5" stroke-linejoin="round"/>
+          <circle cx="32" cy="20" r="8" fill="#fff"/>
+          <circle cx="32" cy="20" r="4" fill="#0066CC"/>
+          <circle cx="34" cy="18" r="1.5" fill="#fff"/>
+        </svg>
+        <span class="sidebar-title">Consultório Visão</span>
+      </div>
+      <button id="sidebar-close" class="sidebar-close" aria-label="Fechar menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#dashboard" class="nav-item active" data-page="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <span>Dashboard</span>
+      </a>
+      <a href="#kanban" class="nav-item" data-page="kanban">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="18"/><rect x="10" y="3" width="5" height="12"/><rect x="17" y="3" width="5" height="16"/></svg>
+        <span>Kanban</span>
+      </a>
+      <a href="#pacientes" class="nav-item" data-page="pacientes">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Pacientes</span>
+        <span class="nav-badge" id="badge-novos" style="display:none">0</span>
+      </a>
+      <a href="#agendamentos" class="nav-item" data-page="agendamentos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span>Agendamentos</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-info" id="sidebar-user">
+        <div class="user-avatar" id="user-avatar">?</div>
+        <div class="user-details">
+          <span class="user-name" id="user-name">Usuário</span>
+          <span class="user-role">Administrador</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── OVERLAY MOBILE ── -->
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <!-- ── MAIN CONTENT ── -->
+  <div class="main-wrapper">
+
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <button id="hamburger" class="hamburger" aria-label="Abrir menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+
+      <div class="topbar-title" id="topbar-title">Dashboard</div>
+
+      <div class="topbar-actions">
+        <!-- Busca global -->
+        <div class="global-search-wrap" id="global-search-wrap">
+          <button class="icon-btn" id="search-toggle" title="Busca global (Ctrl+K)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </button>
+          <div class="global-search-box hidden" id="global-search-box">
+            <input type="text" id="global-search-input" placeholder="Buscar paciente… (Ctrl+K)" autocomplete="off" />
+            <div class="global-search-results" id="global-search-results"></div>
+          </div>
+        </div>
+
+        <!-- Dark mode toggle -->
+        <button class="icon-btn" id="dark-toggle" title="Alternar modo escuro">
+          <svg id="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg id="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+
+        <!-- Sair -->
+        <button class="icon-btn btn-logout" id="logout-btn" title="Sair">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ── PÁGINAS ── -->
+    <main class="main-content">
+
+      <!-- ══ DASHBOARD ══ -->
+      <section id="page-dashboard" class="page active">
+        <!-- Métricas -->
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-icon" style="background:#EEF6FF">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#0066CC" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <div class="metric-info">
+              <span class="metric-label">Total de Pacientes</span>
+              <span class="metric-value skeleton" id="metric-total">—</span>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon" style="background:#FFF8E1">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </div>
+            <div class="metric-info">
+              <span class="metric-label">Agendamentos Hoje</span>
+              <span class="metric-value skeleton" id="metric-hoje">—</span>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon" style="background:#E8F8F1">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#00A86B" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="metric-info">
+              <span class="metric-label">Confirmados (semana)</span>
+              <span class="metric-value skeleton" id="metric-confirmados">—</span>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon" style="background:#F3F0FF">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <div class="metric-info">
+              <span class="metric-label">Concluídos (mês)</span>
+              <span class="metric-value skeleton" id="metric-concluidos">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-grid">
+          <!-- Gráfico de barras CSS -->
+          <div class="card chart-card">
+            <div class="card-header">
+              <h3 class="card-title">Agendamentos — últimos 7 dias</h3>
+            </div>
+            <div class="bar-chart" id="bar-chart">
+              <!-- Preenchido via JS -->
+              <div class="chart-skeleton"></div>
+            </div>
+          </div>
+
+          <!-- Próximos agendamentos -->
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Próximos Agendamentos</h3>
+              <a href="#agendamentos" class="card-link">Ver todos</a>
+            </div>
+            <div class="upcoming-list" id="upcoming-list">
+              <div class="skeleton-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Feed de conversas -->
+        <div class="card" style="margin-top:1.5rem">
+          <div class="card-header">
+            <h3 class="card-title">Últimas Conversas</h3>
+            <span class="realtime-badge">
+              <span class="realtime-dot"></span>
+              Tempo real
+            </span>
+          </div>
+          <div class="feed-list" id="feed-list">
+            <div class="skeleton-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ KANBAN ══ -->
+      <section id="page-kanban" class="page">
+        <div class="kanban-toolbar">
+          <h2 class="page-title">Quadro Kanban</h2>
+          <button class="btn btn-primary btn-sm" id="btn-novo-paciente">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Novo Paciente
+          </button>
+        </div>
+
+        <div class="kanban-board" id="kanban-board">
+          <!-- Coluna: Novo Contato -->
+          <div class="kanban-col" data-status="novo_contato">
+            <div class="col-header col-novo">
+              <span class="col-dot" style="background:#F59E0B"></span>
+              <span class="col-title">Novo Contato</span>
+              <span class="col-count badge" id="count-novo_contato">0</span>
+            </div>
+            <div class="col-cards" id="col-novo_contato" data-status="novo_contato"></div>
+          </div>
+
+          <!-- Coluna: Agendado -->
+          <div class="kanban-col" data-status="agendado">
+            <div class="col-header col-agendado">
+              <span class="col-dot" style="background:#0066CC"></span>
+              <span class="col-title">Agendado</span>
+              <span class="col-count badge" id="count-agendado">0</span>
+            </div>
+            <div class="col-cards" id="col-agendado" data-status="agendado"></div>
+          </div>
+
+          <!-- Coluna: Confirmado -->
+          <div class="kanban-col" data-status="confirmado">
+            <div class="col-header col-confirmado">
+              <span class="col-dot" style="background:#00A86B"></span>
+              <span class="col-title">Confirmado</span>
+              <span class="col-count badge" id="count-confirmado">0</span>
+            </div>
+            <div class="col-cards" id="col-confirmado" data-status="confirmado"></div>
+          </div>
+
+          <!-- Coluna: Concluído -->
+          <div class="kanban-col" data-status="concluido">
+            <div class="col-header col-concluido">
+              <span class="col-dot" style="background:#6B7280"></span>
+              <span class="col-title">Concluído</span>
+              <span class="col-count badge" id="count-concluido">0</span>
+            </div>
+            <div class="col-cards" id="col-concluido" data-status="concluido"></div>
+          </div>
+
+          <!-- Coluna: Cancelado (colapsável) -->
+          <div class="kanban-col kanban-col-collapsible" data-status="cancelado">
+            <div class="col-header col-cancelado" id="toggle-cancelado" style="cursor:pointer">
+              <span class="col-dot" style="background:#EF4444"></span>
+              <span class="col-title">Cancelado</span>
+              <span class="col-count badge" id="count-cancelado">0</span>
+              <svg class="col-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="col-cards col-cards-collapsible" id="col-cancelado" data-status="cancelado"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ PACIENTES ══ -->
+      <section id="page-pacientes" class="page">
+        <div class="page-header-bar">
+          <h2 class="page-title">Pacientes</h2>
+          <div class="page-actions">
+            <div class="search-bar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="pacientes-search" placeholder="Buscar por nome ou telefone…" />
+            </div>
+            <select id="pacientes-filter-status" class="select-filter">
+              <option value="">Todos os status</option>
+              <option value="novo_contato">Novo Contato</option>
+              <option value="agendado">Agendado</option>
+              <option value="confirmado">Confirmado</option>
+              <option value="concluido">Concluído</option>
+              <option value="cancelado">Cancelado</option>
+            </select>
+            <button class="btn btn-primary btn-sm" id="btn-novo-paciente-2">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Novo
+            </button>
+          </div>
+        </div>
+
+        <div class="table-wrapper card">
+          <table class="data-table" id="pacientes-table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Telefone</th>
+                <th>Status</th>
+                <th>Criado em</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="pacientes-tbody">
+              <!-- Preenchido via JS -->
+            </tbody>
+          </table>
+          <div id="pacientes-empty" class="empty-state hidden">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            <p>Nenhum paciente encontrado</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ AGENDAMENTOS ══ -->
+      <section id="page-agendamentos" class="page">
+        <div class="page-header-bar">
+          <h2 class="page-title">Agendamentos</h2>
+          <div class="page-actions">
+            <button class="btn btn-outline btn-sm" id="btn-semana-anterior">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <span class="semana-label" id="semana-label">Esta semana</span>
+            <button class="btn btn-outline btn-sm" id="btn-semana-proxima">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+            <button class="btn btn-primary btn-sm" id="btn-novo-agendamento">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Novo Agendamento
+            </button>
+          </div>
+        </div>
+        <div id="agendamentos-container" class="agendamentos-container">
+          <!-- Preenchido via JS -->
+        </div>
+      </section>
+
+    </main><!-- /main-content -->
+  </div><!-- /main-wrapper -->
+
+</div><!-- /app -->
+
+<!-- ═══════════════════════════════════════════
+     PAINEL DE CHAT (drawer lateral)
+════════════════════════════════════════════ -->
+<div id="chat-panel" class="chat-panel">
+  <div class="chat-panel-header">
+    <div class="chat-patient-info">
+      <div class="chat-avatar" id="chat-avatar">?</div>
+      <div>
+        <div class="chat-patient-name" id="chat-patient-name">—</div>
+        <div class="chat-patient-phone" id="chat-patient-phone">—</div>
+      </div>
+    </div>
+    <div class="chat-panel-actions">
+      <a href="#" id="chat-wa-link" target="_blank" class="icon-btn" title="Abrir WhatsApp">
+        <svg viewBox="0 0 24 24" fill="#25D366" stroke="none"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.128.558 4.122 1.532 5.852L0 24l6.293-1.647C8.066 23.418 9.996 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.912 0-3.692-.526-5.205-1.437l-.374-.222-3.866 1.012 1.029-3.764-.243-.386A9.922 9.922 0 0 1 2 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/></svg>
+      </a>
+      <button class="icon-btn" id="chat-close" title="Fechar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="chat-status-bar" id="chat-status-bar">
+    <!-- status badge do paciente -->
+  </div>
+
+  <div class="chat-messages" id="chat-messages">
+    <!-- Mensagens carregadas via JS -->
+  </div>
+
+  <div class="chat-input-bar">
+    <textarea id="chat-input" placeholder="Digite uma mensagem… (envio via WhatsApp Business API)" rows="1"></textarea>
+    <button class="btn btn-primary" id="chat-send">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </div>
+</div>
+<div id="chat-overlay" class="chat-overlay"></div>
+
+<!-- ═══════════════════════════════════════════
+     MODAL GENÉRICO
+════════════════════════════════════════════ -->
+<div id="modal-overlay" class="modal-overlay hidden">
+  <div class="modal" id="modal-content" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <h3 class="modal-title" id="modal-title">Modal</h3>
+      <button class="icon-btn modal-close" id="modal-close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="modal-body">
+      <!-- Conteúdo dinâmico -->
+    </div>
+    <div class="modal-footer" id="modal-footer">
+      <button class="btn btn-ghost" id="modal-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="modal-confirm">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     TOAST CONTAINER
+════════════════════════════════════════════ -->
+<div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+<!-- ═══════════════════════════════════════════
+     APP JS
+════════════════════════════════════════════ -->
+<script src="app.js"></script>
+
+<!-- ═══════════════════════════════════════════
+     SQL DE SETUP (oculto — copie e execute no Supabase)
+════════════════════════════════════════════ -->
+<!--
+=======================================================
+  SQL COMPLETO — Execute no Supabase SQL Editor
+=======================================================
+
+-- 1. TABELA PACIENTES
+CREATE TABLE IF NOT EXISTS pacientes (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  nome TEXT NOT NULL,
+  telefone TEXT UNIQUE NOT NULL,
+  email TEXT,
+  data_nascimento DATE,
+  status TEXT DEFAULT 'novo_contato'
+    CHECK (status IN ('novo_contato','agendado','confirmado','concluido','cancelado')),
+  observacoes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. TABELA CONVERSAS
+CREATE TABLE IF NOT EXISTS conversas (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  paciente_id UUID REFERENCES pacientes(id) ON DELETE SET NULL,
+  telefone TEXT NOT NULL,
+  origem TEXT DEFAULT 'whatsapp',
+  mensagem TEXT NOT NULL,
+  remetente TEXT NOT NULL
+    CHECK (remetente IN ('paciente','assistente','humano')),
+  tipo_midia TEXT DEFAULT 'texto',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. TABELA AGENDAMENTOS
+CREATE TABLE IF NOT EXISTS agendamentos (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  paciente_id UUID REFERENCES pacientes(id) ON DELETE SET NULL,
+  nome_paciente TEXT NOT NULL,
+  telefone TEXT NOT NULL,
+  data_hora TIMESTAMPTZ NOT NULL,
+  status TEXT DEFAULT 'agendado'
+    CHECK (status IN ('agendado','confirmado','concluido','cancelado')),
+  observacoes TEXT,
+  google_event_id TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. TRIGGER updated_at (reutilizável)
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER pacientes_updated_at
+  BEFORE UPDATE ON pacientes
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER agendamentos_updated_at
+  BEFORE UPDATE ON agendamentos
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- 5. ÍNDICES
+CREATE INDEX IF NOT EXISTS idx_pacientes_status       ON pacientes(status);
+CREATE INDEX IF NOT EXISTS idx_pacientes_telefone     ON pacientes(telefone);
+CREATE INDEX IF NOT EXISTS idx_conversas_paciente     ON conversas(paciente_id);
+CREATE INDEX IF NOT EXISTS idx_conversas_telefone     ON conversas(telefone);
+CREATE INDEX IF NOT EXISTS idx_agendamentos_data_hora ON agendamentos(data_hora);
+CREATE INDEX IF NOT EXISTS idx_agendamentos_paciente  ON agendamentos(paciente_id);
+CREATE INDEX IF NOT EXISTS idx_agendamentos_status    ON agendamentos(status);
+
+-- 6. ROW LEVEL SECURITY (RLS)
+-- ATENÇÃO: Habilite RLS e configure policies de acordo com sua necessidade de acesso.
+-- O exemplo abaixo permite que apenas usuários autenticados acessem os dados.
+
+ALTER TABLE pacientes    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE conversas    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agendamentos ENABLE ROW LEVEL SECURITY;
+
+-- Política: usuários autenticados podem ler/escrever em todas as tabelas
+CREATE POLICY "Acesso autenticado - pacientes" ON pacientes
+  FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Acesso autenticado - conversas" ON conversas
+  FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Acesso autenticado - agendamentos" ON agendamentos
+  FOR ALL USING (auth.role() = 'authenticated');
+
+-- Para permitir que o serviço de webhook (sem autenticação de usuário) insira conversas,
+-- crie uma policy separada usando a service_role key no backend.
+
+=======================================================
+-->
+
+</body>
+</html>
