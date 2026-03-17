@@ -127,7 +127,6 @@ setOpenModalPaciente((paciente) => {
 
 window.filtrarAgendamentosPorData = filtrarAgendamentosPorData;
 window.exportarAgendamentosCSV    = exportarAgendamentosCSV;
-window.renderAgendamentos         = renderAgendamentos;
 
 // ── Boot ──
 

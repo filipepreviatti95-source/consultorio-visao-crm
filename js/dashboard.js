@@ -324,17 +324,24 @@ export async function loadDashboard() {
   renderDashboardAgenda();
   renderDashboardFeed();
 
-  // Polling fallback: atualiza feed de conversas a cada 30s
+  // Polling fallback: atualiza feed de conversas a cada 30s (com lock anti-overlap)
   stopDashboardPolling();
+  let polling = false;
   feedPollInterval = setInterval(async () => {
     if (State.currentPage !== 'dashboard') {
       stopDashboardPolling();
       return;
     }
+    if (polling) return; // Evita fetches sobrepostos
+    polling = true;
     try {
       await fetchConversasRecentes();
       renderDashboardFeed();
-    } catch { /* silencioso */ }
+    } catch (e) {
+      console.warn('[Dashboard] Polling error:', e.message || e);
+    } finally {
+      polling = false;
+    }
   }, 30000);
 }
 

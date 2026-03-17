@@ -12,7 +12,11 @@ export async function fetchPacientes() {
     .from('pacientes')
     .select('*')
     .order('created_at', { ascending: false });
-  if (!error) State.pacientes = data || [];
+  if (error) {
+    console.error('[API] fetchPacientes error:', error.message);
+    return;
+  }
+  State.pacientes = data || [];
 }
 
 export async function updatePacienteStatus(id, novoStatus) {
@@ -56,7 +60,11 @@ export async function fetchAgendamentos() {
     .from('agendamentos')
     .select('*')
     .order('data_hora', { ascending: true });
-  if (!error) State.agendamentos = data || [];
+  if (error) {
+    console.error('[API] fetchAgendamentos error:', error.message);
+    return;
+  }
+  State.agendamentos = data || [];
 }
 
 export async function saveAgendamento(id, payload) {
@@ -102,7 +110,10 @@ export async function fetchConversasRecentes() {
     .eq('remetente', 'paciente')
     .order('created_at', { ascending: false })
     .limit(60);
-  if (error) return;
+  if (error) {
+    console.error('[API] fetchConversasRecentes error:', error.message);
+    return;
+  }
 
   // Agrupa: 1 por paciente, máx 12
   const vistas = new Set();
@@ -162,6 +173,13 @@ export async function insertConversa(pacienteId, telefone, mensagem) {
   if (error) throw error;
 }
 
+// ── Webhook Auth ──
+
+const WEBHOOK_HEADERS = {
+  'Content-Type': 'application/json',
+  'X-Webhook-Secret': 'cv2026_wh_secure_key',
+};
+
 // ── WhatsApp — Enviar mensagem via n8n webhook ──
 
 const WA_SEND_WEBHOOK = 'https://n8n.srv1474226.hstgr.cloud/webhook/crm-send-whatsapp';
@@ -170,7 +188,7 @@ export async function sendWhatsApp(telefone, mensagem) {
   try {
     const res = await fetch(WA_SEND_WEBHOOK, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: WEBHOOK_HEADERS,
       body: JSON.stringify({ telefone, mensagem }),
     });
 
@@ -179,14 +197,11 @@ export async function sendWhatsApp(telefone, mensagem) {
     let json = null;
     try { json = JSON.parse(text); } catch { /* não é JSON */ }
 
-    // Log para debug (sem alarmar o usuário)
     if (!res.ok) {
       console.warn(`[WA] HTTP ${res.status}:`, text.slice(0, 200));
+      return false;
     }
 
-    // Retorna true em quase todos os cenários — o n8n/Meta API
-    // frequentemente retorna erros/warnings mesmo quando a mensagem foi enviada.
-    // Só retorna false se o webhook EXPLICITAMENTE disse que falhou.
     if (json && json.ok === false) {
       console.warn('[WA] Webhook retornou ok:false —', json.erro || 'sem detalhes');
       return false;
@@ -215,7 +230,7 @@ export async function syncGcalToSupabase(dataInicio, dataFim) {
     // 1. Busca eventos do GCal via n8n webhook
     const res = await fetch(GCAL_FETCH, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: WEBHOOK_HEADERS,
       body: JSON.stringify({ dataInicio, dataFim }),
     });
     if (!res.ok) throw new Error(`GCal fetch error: ${res.status}`);
@@ -282,19 +297,21 @@ export async function syncGcalToSupabase(dataInicio, dataFim) {
     }
 
     // 5. FORWARD SYNC — cria/atualiza do GCal → Supabase
+    //    Usa porGcalId (já construído acima) para evitar N+1 queries
+    //    Busca pacientes em batch para novos eventos
+    const { data: allPacientes } = await db.from('pacientes').select('id, telefone');
+    const pacientePorTel = {};
+    for (const p of (allPacientes || [])) {
+      if (p.telefone) pacientePorTel[p.telefone.replace(/\D/g, '').slice(-8)] = p.id;
+    }
+
     for (const ev of eventosGcal) {
       if (!ev.googleEventId || !ev.dataHora) continue;
 
-      // Busca TODOS registros com esse google_event_id (sem limit)
-      const { data: existentes } = await db
-        .from('agendamentos')
-        .select('id, status, data_hora')
-        .eq('google_event_id', ev.googleEventId);
-
-      const existente = existentes?.[0] || null;
+      // Usa dados já carregados (sem query extra)
+      const existente = porGcalId[ev.googleEventId]?.[0] || null;
 
       if (existente) {
-        // Atualiza status/horário se mudou
         const mudou = existente.status !== ev.status ||
           existente.data_hora?.slice(0, 16) !== ev.dataHora?.slice(0, 16);
         if (mudou) {
@@ -306,15 +323,11 @@ export async function syncGcalToSupabase(dataInicio, dataFim) {
           atualizados++;
         }
       } else {
-        // Cria novo agendamento
+        // Busca paciente_id no cache local
         let pacienteId = null;
         if (ev.telefone) {
-          const { data: pacs } = await db
-            .from('pacientes')
-            .select('id')
-            .like('telefone', `%${ev.telefone.slice(-8)}`)
-            .limit(1);
-          pacienteId = pacs?.[0]?.id || null;
+          const tel8 = ev.telefone.replace(/\D/g, '').slice(-8);
+          pacienteId = pacientePorTel[tel8] || null;
         }
 
         const { error: insertErr } = await db.from('agendamentos').insert({
@@ -355,7 +368,7 @@ export async function sincronizarGcal({ acao, googleEventId, nome, telefone, dat
   try {
     const res = await fetch(GCAL_WEBHOOK, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: WEBHOOK_HEADERS,
       body: JSON.stringify({ acao, eventId: googleEventId || null, nome, telefone, dataHora, obs, status }),
     });
     if (!res.ok) return null;
