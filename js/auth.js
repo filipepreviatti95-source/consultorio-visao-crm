@@ -2,7 +2,7 @@
  * auth.js — Autenticação Supabase
  */
 
-import { db, State, isAdmin } from './config.js';
+import { db, State } from './config.js';
 import { iniciais, toast } from './utils.js';
 import { openModal, closeModal } from './ui.js';
 import { stopDashboardPolling } from './dashboard.js';
@@ -257,8 +257,15 @@ function traduzErroAuth(msg) {
   return msg;
 }
 
+let logoutInitDone = false;
+
 export function setupLogout() {
-  document.getElementById('logout-btn').addEventListener('click', async () => {
+  if (logoutInitDone) return;
+  const btn = document.getElementById('logout-btn');
+  if (!btn) return;
+  logoutInitDone = true;
+
+  btn.addEventListener('click', async () => {
     await db.auth.signOut();
   });
 }

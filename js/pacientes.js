@@ -21,9 +21,10 @@ export async function loadPacientes() {
 let pacFilterSetup = false;
 function setupPacientesFilters() {
   if (pacFilterSetup) return;
-  pacFilterSetup = true;
   const searchInput  = document.getElementById('pacientes-search');
   const statusFilter = document.getElementById('pacientes-filter-status');
+  if (!searchInput || !statusFilter) return;
+  pacFilterSetup = true;
 
   let timeout;
   const applyFilter = () => {
@@ -46,6 +47,7 @@ function setupPacientesFilters() {
 export function renderPacientesTable(pacientes) {
   const tbody   = document.getElementById('pacientes-tbody');
   const emptyEl = document.getElementById('pacientes-empty');
+  if (!tbody || !emptyEl) return;
 
   if (pacientes.length === 0) {
     tbody.innerHTML = '';
@@ -207,7 +209,12 @@ function confirmarDeletePaciente(id) {
 
 // ── Botões "Novo Paciente" ──
 
+let novoPacBtnsSetup = false;
+
 export function setupNovoPacienteBtns() {
+  if (novoPacBtnsSetup) return;
+  novoPacBtnsSetup = true;
+
   document.getElementById('btn-novo-paciente')?.addEventListener('click', () => openModalPaciente(null));
   document.getElementById('btn-novo-paciente-2')?.addEventListener('click', () => openModalPaciente(null));
 }

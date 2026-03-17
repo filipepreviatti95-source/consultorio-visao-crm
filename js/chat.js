@@ -6,12 +6,19 @@ import { State } from './config.js';
 import { iniciais, waLink, esc, fmtData, tempoDesde, toast } from './utils.js';
 import { fetchConversasPaciente, insertConversa, sendWhatsApp } from './api.js';
 
-export function initChatPanel() {
-  document.getElementById('chat-close').addEventListener('click', closeChatPanel);
-  document.getElementById('chat-overlay').addEventListener('click', closeChatPanel);
+let chatInitDone = false;
 
-  const sendBtn = document.getElementById('chat-send');
-  const input   = document.getElementById('chat-input');
+export function initChatPanel() {
+  if (chatInitDone) return;
+  const closeEl  = document.getElementById('chat-close');
+  const overlayEl = document.getElementById('chat-overlay');
+  const sendBtn  = document.getElementById('chat-send');
+  const input    = document.getElementById('chat-input');
+  if (!closeEl || !overlayEl || !sendBtn || !input) return;
+  chatInitDone = true;
+
+  closeEl.addEventListener('click', closeChatPanel);
+  overlayEl.addEventListener('click', closeChatPanel);
 
   sendBtn.addEventListener('click', sendChatMessage);
   input.addEventListener('keydown', (e) => {
@@ -43,9 +50,15 @@ export async function openChatPanel(paciente) {
   document.getElementById('chat-panel').classList.add('open');
   document.getElementById('chat-overlay').style.display = 'block';
 
-  const msgs = await fetchConversasPaciente(paciente.id, paciente.telefone);
-  State.conversas = msgs;
-  renderChatMessages(msgs);
+  try {
+    const msgs = await fetchConversasPaciente(paciente.id, paciente.telefone);
+    State.conversas = msgs;
+    renderChatMessages(msgs);
+  } catch (err) {
+    console.error('[Chat] Erro ao carregar conversas:', err);
+    const msgContainer = document.getElementById('chat-messages');
+    msgContainer.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--color-danger);font-size:.8rem">Erro ao carregar conversas</div>';
+  }
 }
 
 export function closeChatPanel() {

@@ -48,11 +48,15 @@ setOnAppInit(async () => {
   try { setupLogout(); } catch (e) { console.error('[App] setupLogout error:', e); }
   try { setupNovoPacienteBtns(); } catch (e) { console.error('[App] setupNovoPacienteBtns error:', e); }
 
-  // Botão "Limpar filtro" dos agendamentos
-  document.getElementById('btn-limpar-filtro')?.addEventListener('click', () => {
-    State.semanaOffset = 0;
-    renderAgendamentos();
-  });
+  // Botão "Limpar filtro" dos agendamentos (guard via dataset)
+  const btnLimpar = document.getElementById('btn-limpar-filtro');
+  if (btnLimpar && !btnLimpar._initDone) {
+    btnLimpar._initDone = true;
+    btnLimpar.addEventListener('click', () => {
+      State.semanaOffset = 0;
+      renderAgendamentos();
+    });
+  }
 
   // Realtime
   initRealtime();

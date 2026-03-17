@@ -13,6 +13,7 @@ const PAGE_TITLES = {
 };
 
 let pageLoader = null; // função injetada que carrega dados de cada página
+let navInitDone = false;
 
 export function setPageLoader(fn) {
   pageLoader = fn;
@@ -21,6 +22,9 @@ export function setPageLoader(fn) {
 // ── Navegação ──
 
 export function initNavigation() {
+  if (navInitDone) return;
+  navInitDone = true;
+
   // Menu lateral
   document.querySelectorAll('.nav-item').forEach(link => {
     link.addEventListener('click', (e) => {
@@ -75,10 +79,19 @@ export function navigateTo(page, updateHash = true) {
 
 // ── Sidebar Mobile ──
 
+let sidebarInitDone = false;
+
 export function initSidebar() {
-  document.getElementById('hamburger').addEventListener('click', openSidebarMobile);
-  document.getElementById('sidebar-close').addEventListener('click', closeSidebarMobile);
-  document.getElementById('sidebar-overlay').addEventListener('click', closeSidebarMobile);
+  if (sidebarInitDone) return;
+  const hamburger = document.getElementById('hamburger');
+  const sideClose = document.getElementById('sidebar-close');
+  const sideOver  = document.getElementById('sidebar-overlay');
+  if (!hamburger || !sideClose || !sideOver) return;
+  sidebarInitDone = true;
+
+  hamburger.addEventListener('click', openSidebarMobile);
+  sideClose.addEventListener('click', closeSidebarMobile);
+  sideOver.addEventListener('click', closeSidebarMobile);
 }
 
 function openSidebarMobile() {
@@ -95,18 +108,20 @@ function closeSidebarMobile() {
 
 // ── Dark Mode ──
 
+let darkModeInitDone = false;
+
 export function initDarkMode() {
   applyTheme(State.darkMode);
+  if (darkModeInitDone) return;
   const btn = document.getElementById('dark-toggle');
   if (!btn) { console.warn('[Router] dark-toggle button not found'); return; }
-  // Remove handler antigo (guard contra duplicatas)
-  btn._darkHandler = () => {
+  darkModeInitDone = true;
+
+  btn.addEventListener('click', () => {
     State.darkMode = !State.darkMode;
     localStorage.setItem('darkMode', State.darkMode);
     applyTheme(State.darkMode);
-  };
-  btn.addEventListener('click', btn._darkHandler);
-  console.log('[Router] initDarkMode OK');
+  });
 }
 
 function applyTheme(dark) {
@@ -119,17 +134,21 @@ function applyTheme(dark) {
 
 // ── Sound Toggle ──
 
+let soundInitDone = false;
+
 export function initSoundToggle() {
   applySoundUI(isSoundEnabled());
+  if (soundInitDone) return;
   const btn = document.getElementById('sound-toggle');
   if (!btn) { console.warn('[Router] sound-toggle button not found'); return; }
+  soundInitDone = true;
+
   btn.addEventListener('click', () => {
     const newVal = !isSoundEnabled();
     setSoundEnabled(newVal);
     applySoundUI(newVal);
     if (newVal) requestNotificationPermission();
   });
-  console.log('[Router] initSoundToggle OK');
   // Pede permissão de notificação no init se som está ativo
   if (isSoundEnabled()) requestNotificationPermission();
 }

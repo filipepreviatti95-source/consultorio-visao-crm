@@ -20,9 +20,12 @@ let agNavSetup = false;
 function setupAgendamentosNav() {
   if (agNavSetup) return;
   agNavSetup = true;
-  document.getElementById('btn-semana-anterior').onclick = () => { State.semanaOffset--; renderAgendamentos(); };
-  document.getElementById('btn-semana-proxima').onclick  = () => { State.semanaOffset++; renderAgendamentos(); };
-  document.getElementById('btn-novo-agendamento').onclick = () => openModalAgendamento(null);
+  const btnAnt = document.getElementById('btn-semana-anterior');
+  const btnProx = document.getElementById('btn-semana-proxima');
+  const btnNovo = document.getElementById('btn-novo-agendamento');
+  if (btnAnt) btnAnt.onclick = () => { State.semanaOffset--; renderAgendamentos(); };
+  if (btnProx) btnProx.onclick = () => { State.semanaOffset++; renderAgendamentos(); };
+  if (btnNovo) btnNovo.onclick = () => openModalAgendamento(null);
 
   // Sync GCal button
   document.getElementById('btn-sync-gcal-ag')?.addEventListener('click', async (e) => {

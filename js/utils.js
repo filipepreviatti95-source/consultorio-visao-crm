@@ -85,6 +85,7 @@ const TOAST_ICONS = {
 
 export function toast(msg, type = 'info', duration = 3500) {
   const container = document.getElementById('toast-container');
+  if (!container) { console.warn('[Toast]', type, msg); return null; }
   const t = document.createElement('div');
   t.className = `toast toast-${type}`;
   t.innerHTML = `

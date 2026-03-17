@@ -8,16 +8,20 @@ import { esc, iniciais, STATUS_LABEL } from './utils.js';
 // ── Busca Global ──
 
 let onSearchResultClick = null;
+let searchInitDone = false;
 
 export function setOnSearchResultClick(fn) {
   onSearchResultClick = fn;
 }
 
 export function initGlobalSearch() {
+  if (searchInitDone) return;
   const toggle  = document.getElementById('search-toggle');
   const box     = document.getElementById('global-search-box');
   const input   = document.getElementById('global-search-input');
   const results = document.getElementById('global-search-results');
+  if (!toggle || !box || !input || !results) return;
+  searchInitDone = true;
 
   toggle.addEventListener('click', () => {
     box.classList.toggle('hidden');
@@ -34,7 +38,7 @@ export function initGlobalSearch() {
   });
 
   document.addEventListener('click', (e) => {
-    if (!document.getElementById('global-search-wrap').contains(e.target)) {
+    if (!document.getElementById('global-search-wrap')?.contains(e.target)) {
       box.classList.add('hidden');
     }
   });
@@ -83,11 +87,20 @@ function renderSearchResults(q, container) {
 
 // ── Modal Genérico ──
 
+let modalInitDone = false;
+
 export function initModal() {
-  document.getElementById('modal-close').addEventListener('click', closeModal);
-  document.getElementById('modal-cancel').addEventListener('click', closeModal);
-  document.getElementById('modal-overlay').addEventListener('click', (e) => {
-    if (e.target === document.getElementById('modal-overlay')) closeModal();
+  if (modalInitDone) return;
+  const closeBtn = document.getElementById('modal-close');
+  const cancelBtn = document.getElementById('modal-cancel');
+  const overlay = document.getElementById('modal-overlay');
+  if (!closeBtn || !cancelBtn || !overlay) return;
+  modalInitDone = true;
+
+  closeBtn.addEventListener('click', closeModal);
+  cancelBtn.addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeModal();
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeModal();
