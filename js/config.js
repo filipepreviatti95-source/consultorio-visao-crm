@@ -16,6 +16,7 @@ export const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 // ── Estado Global (reativo por referência) ──
 export const State = {
   user: null,
+  userRole: 'funcionario', // 'admin' | 'funcionario'
   currentPage: 'dashboard',
   pacientes: [],
   agendamentos: [],
@@ -26,3 +27,8 @@ export const State = {
   semanaOffset: 0,
   realtimeChannels: [],
 };
+
+/** Verifica se o usuário logado é admin */
+export function isAdmin() {
+  return State.userRole === 'admin';
+}

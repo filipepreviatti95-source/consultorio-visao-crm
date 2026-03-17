@@ -2,7 +2,7 @@
  * auth.js — Autenticação Supabase
  */
 
-import { db, State } from './config.js';
+import { db, State, isAdmin } from './config.js';
 import { iniciais, toast } from './utils.js';
 import { openModal, closeModal } from './ui.js';
 import { stopDashboardPolling } from './dashboard.js';
@@ -78,10 +78,21 @@ function onLogin(user) {
   State.user = user;
   const email = user.email || '';
   const nome  = user.user_metadata?.full_name || email.split('@')[0] || 'Usuário';
+  const role  = user.user_metadata?.role || 'funcionario';
+  State.userRole = role;
+
   document.getElementById('user-name').textContent  = nome;
   document.getElementById('user-avatar').textContent = iniciais(nome);
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
+
+  // Atualiza label de role no sidebar
+  const roleEl = document.querySelector('.user-role');
+  if (roleEl) roleEl.textContent = role === 'admin' ? 'Administrador' : 'Atendimento';
+
+  // Aplica classes de permissão no body para CSS condicional
+  document.body.classList.toggle('role-admin', role === 'admin');
+  document.body.classList.toggle('role-funcionario', role !== 'admin');
 
   // Guard: onAppInit só roda uma vez (onAuthStateChange pode disparar múltiplas vezes)
   if (onAppInit && !appInitialized) {
@@ -100,12 +111,14 @@ function onLogin(user) {
 
 function onLogout() {
   State.user = null;
+  State.userRole = 'funcionario';
   appInitialized = false; // permite re-init no próximo login
   stopDashboardPolling(); // para polling interval do dashboard
   State.realtimeChannels.forEach(ch => db.removeChannel(ch));
   State.realtimeChannels = [];
   document.getElementById('app').classList.add('hidden');
   document.getElementById('login-screen').classList.remove('hidden');
+  document.body.classList.remove('role-admin', 'role-funcionario');
 }
 
 function showLoginScreen() {

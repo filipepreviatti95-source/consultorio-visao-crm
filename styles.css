@@ -1990,3 +1990,26 @@ input, select, textarea { font-family: inherit; }
     opacity: 0;
   }
 }
+
+/* ─── ROLE-BASED ACCESS ─────────────────────────────── */
+
+/* Funcionário: esconde botões de criação/edição/admin */
+body.role-funcionario #btn-novo-paciente,
+body.role-funcionario #btn-novo-paciente-2,
+body.role-funcionario #btn-novo-agendamento,
+body.role-funcionario #btn-dash-novo-ag,
+body.role-funcionario #btn-sync-gcal,
+body.role-funcionario #btn-sync-gcal-ag,
+body.role-funcionario #btn-limpar-feed {
+  display: none !important;
+}
+
+/* Funcionário: kanban cards sem cursor de drag */
+body.role-funcionario .kanban-card {
+  cursor: default;
+}
+
+/* Funcionário: agendamentos row sem cursor pointer */
+body.role-funcionario .agendamento-row {
+  cursor: default;
+}

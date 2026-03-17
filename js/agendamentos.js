@@ -3,7 +3,7 @@
  * v2 — botões de delete, ações rápidas, sync GCal, UX melhorada
  */
 
-import { State } from './config.js';
+import { State, isAdmin } from './config.js';
 import { esc, fmtData, fmtHora, STATUS_LABEL, STATUS_COLOR, toast } from './utils.js';
 import { fetchAgendamentos, fetchPacientes, saveAgendamento, deleteAgendamento, updateAgendamentoField, sincronizarGcal, syncGcalToSupabase } from './api.js';
 import { openModal, closeModal } from './ui.js';
@@ -129,33 +129,35 @@ function buildAgendamentoRow(ag) {
       </div>
       <span class="status-pill ag-status-pill status-${ag.status}">${STATUS_LABEL[ag.status] || ag.status}</span>
       <div class="ag-actions">
-        ${!isConcluido && !isCancelado ? `
+        ${isAdmin() && !isConcluido && !isCancelado ? `
         <button class="icon-btn ag-done-btn" data-id="${ag.id}" title="Marcar concluído">
           <svg viewBox="0 0 24 24" fill="none" stroke="#00A86B" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
         </button>` : ''}
-        ${!isCancelado ? `
+        ${isAdmin() && !isCancelado ? `
         <button class="icon-btn ag-cancel-btn" data-id="${ag.id}" title="Cancelar">
           <svg viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </button>` : ''}
-        <button class="icon-btn ag-edit-btn" data-id="${ag.id}" title="Editar">
+        ${isAdmin() ? `<button class="icon-btn ag-edit-btn" data-id="${ag.id}" title="Editar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 1 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         </button>
         <button class="icon-btn ag-delete-btn" data-id="${ag.id}" title="Excluir">
           <svg viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-        </button>
+        </button>` : ''}
       </div>
     </div>`;
 }
 
 function bindAgendamentoRowEvents(container) {
-  // Click na row → editar
-  container.querySelectorAll('.agendamento-row').forEach(row => {
-    row.addEventListener('click', (e) => {
-      if (e.target.closest('.icon-btn')) return; // ignora cliques nos botões
-      const ag = State.agendamentos.find(a => a.id === row.dataset.id);
-      if (ag) openModalAgendamento(ag);
+  // Click na row → editar (só admin)
+  if (isAdmin()) {
+    container.querySelectorAll('.agendamento-row').forEach(row => {
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('.icon-btn')) return; // ignora cliques nos botões
+        const ag = State.agendamentos.find(a => a.id === row.dataset.id);
+        if (ag) openModalAgendamento(ag);
+      });
     });
-  });
+  }
 
   // Botão concluir
   container.querySelectorAll('.ag-done-btn').forEach(btn => {

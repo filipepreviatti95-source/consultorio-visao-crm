@@ -2,7 +2,7 @@
  * kanban.js — Quadro Kanban com drag & drop + confetti
  */
 
-import { State } from './config.js';
+import { State, isAdmin } from './config.js';
 import { esc, fmtDataHora, tempoDesde, waLink, STATUS_LABEL, toast } from './utils.js';
 import { fetchPacientes, fetchAgendamentos, updatePacienteStatus } from './api.js';
 import { openChatPanel } from './chat.js';
@@ -68,7 +68,7 @@ function buildKanbanCard(p) {
   const proximoStatus = getProximoStatus(p.status);
 
   return `
-    <div class="kanban-card" draggable="true" data-id="${p.id}" data-status="${p.status}">
+    <div class="kanban-card" draggable="${isAdmin()}" data-id="${p.id}" data-status="${p.status}">
       <div class="card-top">
         <div class="card-patient-name">${esc(p.nome)}</div>
         <a href="${waLink(p.telefone)}" target="_blank" class="card-wa-link" title="WhatsApp">
@@ -96,13 +96,13 @@ function buildKanbanCard(p) {
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg> Chat
         </button>
-        <button class="card-action-btn btn-card-edit" title="Editar">
+        ${isAdmin() ? `<button class="card-action-btn btn-card-edit" title="Editar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 1 2-2v-7"/>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
           </svg> Editar
-        </button>
-        ${proximoStatus ? `
+        </button>` : ''}
+        ${proximoStatus && isAdmin() ? `
         <button class="card-action-btn btn-card-avancar" title="Avançar status" style="color:var(--color-secondary);border-color:var(--color-secondary)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="9 18 15 12 9 6"/>
