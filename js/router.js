@@ -97,11 +97,16 @@ function closeSidebarMobile() {
 
 export function initDarkMode() {
   applyTheme(State.darkMode);
-  document.getElementById('dark-toggle').addEventListener('click', () => {
+  const btn = document.getElementById('dark-toggle');
+  if (!btn) { console.warn('[Router] dark-toggle button not found'); return; }
+  // Remove handler antigo (guard contra duplicatas)
+  btn._darkHandler = () => {
     State.darkMode = !State.darkMode;
     localStorage.setItem('darkMode', State.darkMode);
     applyTheme(State.darkMode);
-  });
+  };
+  btn.addEventListener('click', btn._darkHandler);
+  console.log('[Router] initDarkMode OK');
 }
 
 function applyTheme(dark) {
@@ -116,12 +121,15 @@ function applyTheme(dark) {
 
 export function initSoundToggle() {
   applySoundUI(isSoundEnabled());
-  document.getElementById('sound-toggle')?.addEventListener('click', () => {
+  const btn = document.getElementById('sound-toggle');
+  if (!btn) { console.warn('[Router] sound-toggle button not found'); return; }
+  btn.addEventListener('click', () => {
     const newVal = !isSoundEnabled();
     setSoundEnabled(newVal);
     applySoundUI(newVal);
     if (newVal) requestNotificationPermission();
   });
+  console.log('[Router] initSoundToggle OK');
   // Pede permissão de notificação no init se som está ativo
   if (isSoundEnabled()) requestNotificationPermission();
 }

@@ -31,20 +31,22 @@ import { loadAgendamentos, renderAgendamentos, filtrarAgendamentosPorData, expor
 // ── Callback: após login bem-sucedido ──
 
 setOnAppInit(async () => {
+  console.log('[App] onAppInit start');
+
   // Desbloqueia AudioContext na primeira interação (autoplay policy)
   unlockAudio();
 
-  // Inicializa UI
-  initNavigation();
-  initSidebar();
-  initDarkMode();
-  initSoundToggle();
-  initGlobalSearch();
-  initModal();
-  initChatPanel();
-  initDashboardFilters();
-  setupLogout();
-  setupNovoPacienteBtns();
+  // Inicializa UI — cada init em try/catch para não quebrar os seguintes
+  try { initNavigation(); } catch (e) { console.error('[App] initNavigation error:', e); }
+  try { initSidebar(); } catch (e) { console.error('[App] initSidebar error:', e); }
+  try { initDarkMode(); } catch (e) { console.error('[App] initDarkMode error:', e); }
+  try { initSoundToggle(); } catch (e) { console.error('[App] initSoundToggle error:', e); }
+  try { initGlobalSearch(); } catch (e) { console.error('[App] initGlobalSearch error:', e); }
+  try { initModal(); } catch (e) { console.error('[App] initModal error:', e); }
+  try { initChatPanel(); } catch (e) { console.error('[App] initChatPanel error:', e); }
+  try { initDashboardFilters(); } catch (e) { console.error('[App] initDashboardFilters error:', e); }
+  try { setupLogout(); } catch (e) { console.error('[App] setupLogout error:', e); }
+  try { setupNovoPacienteBtns(); } catch (e) { console.error('[App] setupNovoPacienteBtns error:', e); }
 
   // Botão "Limpar filtro" dos agendamentos
   document.getElementById('btn-limpar-filtro')?.addEventListener('click', () => {
@@ -58,6 +60,8 @@ setOnAppInit(async () => {
   // Carrega página inicial (ou do hash)
   const page = window.location.hash.replace('#', '') || 'dashboard';
   navigateTo(page);
+
+  console.log('[App] onAppInit complete');
 });
 
 // ── Callback: carrega dados ao mudar de página ──

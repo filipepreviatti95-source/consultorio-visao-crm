@@ -206,24 +206,25 @@ export async function sendWhatsApp(telefone, mensagem) {
     let json = null;
     try { json = JSON.parse(text); } catch { /* não é JSON */ }
 
-    // Se o webhook retornou ok explicitamente = false, é erro real
-    if (json && json.ok === false) {
-      throw new Error(json.erro || 'Erro desconhecido');
+    // Log para debug (sem alarmar o usuário)
+    if (!res.ok) {
+      console.warn(`[WA] HTTP ${res.status}:`, text.slice(0, 200));
     }
 
-    // Se HTTP 200-299, sucesso garantido
-    if (res.ok) return true;
+    // Retorna true em quase todos os cenários — o n8n/Meta API
+    // frequentemente retorna erros/warnings mesmo quando a mensagem foi enviada.
+    // Só retorna false se o webhook EXPLICITAMENTE disse que falhou.
+    if (json && json.ok === false) {
+      console.warn('[WA] Webhook retornou ok:false —', json.erro || 'sem detalhes');
+      return false;
+    }
 
-    // HTTP não-200: o n8n pode retornar 500 quando a Meta API dá warning
-    // mas a mensagem pode ter sido enviada. Tratamos como "incerto" mas
-    // NÃO lançamos erro — logamos e retornamos "sent" (melhor UX).
-    // Se quiser ser strict, descomente o throw abaixo.
-    console.warn(`sendWhatsApp HTTP ${res.status}:`, text.slice(0, 200));
-    return true; // otimismo: mensagem provavelmente foi enviada
+    return true;
 
   } catch (err) {
-    console.error('sendWhatsApp error:', err);
-    throw err;
+    // Erros de rede, CORS, timeout — logamos mas não explodimos
+    console.warn('[WA] Network/fetch error (best-effort):', err.message || err);
+    return false;
   }
 }
 

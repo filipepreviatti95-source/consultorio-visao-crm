@@ -6,6 +6,7 @@ import { db, State } from './config.js';
 import { iniciais } from './utils.js';
 
 let onAppInit = null; // callback injetado pelo app.js
+let appInitialized = false; // guard: só roda uma vez
 
 export function setOnAppInit(fn) {
   onAppInit = fn;
@@ -70,11 +71,25 @@ function onLogin(user) {
   document.getElementById('user-avatar').textContent = iniciais(nome);
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
-  if (onAppInit) onAppInit();
+
+  // Guard: onAppInit só roda uma vez (onAuthStateChange pode disparar múltiplas vezes)
+  if (onAppInit && !appInitialized) {
+    appInitialized = true;
+    try {
+      const result = onAppInit();
+      // Se retornar Promise, captura erros async
+      if (result && typeof result.catch === 'function') {
+        result.catch(err => console.error('[Auth] onAppInit async error:', err));
+      }
+    } catch (err) {
+      console.error('[Auth] onAppInit sync error:', err);
+    }
+  }
 }
 
 function onLogout() {
   State.user = null;
+  appInitialized = false; // permite re-init no próximo login
   State.realtimeChannels.forEach(ch => db.removeChannel(ch));
   State.realtimeChannels = [];
   document.getElementById('app').classList.add('hidden');

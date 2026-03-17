@@ -101,10 +101,13 @@ async function sendChatMessage() {
     State.conversas = msgs;
     renderChatMessages(msgs);
 
-    // 3. Envia via WhatsApp (async — não bloqueia UI)
-    sendWhatsApp(paciente.telefone, msg)
-      .then(() => toast('Mensagem enviada via WhatsApp ✓', 'success', 3000))
-      .catch(() => toast('Salvo no CRM, mas falha ao enviar WhatsApp (janela 24h pode ter expirado)', 'warning', 5000));
+    // 3. Envia via WhatsApp (async — best-effort, não bloqueia UI)
+    sendWhatsApp(paciente.telefone, msg).then((ok) => {
+      if (ok) {
+        toast('Mensagem enviada via WhatsApp ✓', 'success', 3000);
+      }
+      // Se !ok, a mensagem já foi salva no CRM — sem alarmar o usuário
+    });
 
   } catch (err) {
     toast(`Erro ao salvar: ${err.message}`, 'error');
