@@ -143,6 +143,12 @@ function renderCalendar() {
     }
   }
 
+  // Botão confirmar — só habilita quando ambas as datas estão selecionadas
+  const confirmBtn = document.getElementById('cal-confirm');
+  if (confirmBtn) {
+    confirmBtn.disabled = !(calPickStart && calPickEnd);
+  }
+
   // Click handler nos dias
   daysEl.querySelectorAll('.cal-day:not(.cal-other)').forEach(dayEl => {
     dayEl.addEventListener('click', () => {
@@ -167,8 +173,7 @@ function renderCalendar() {
         }
         calStep = 'start';
         renderCalendar();
-        // Auto-apply
-        applyCalendarRange();
+        // NÃO fecha automaticamente — espera o botão "Confirmar"
       }
     });
   });
@@ -233,6 +238,11 @@ export function initDashboardFilters() {
     renderCalendar();
   });
 
+  // Confirmar seleção de período
+  document.getElementById('cal-confirm')?.addEventListener('click', () => {
+    applyCalendarRange();
+  });
+
   // Clear selection
   document.getElementById('cal-clear')?.addEventListener('click', () => {
     calPickStart = null;
@@ -242,7 +252,9 @@ export function initDashboardFilters() {
   });
 
   // Close calendar on click outside
-  document.addEventListener('click', (e) => {
+  // Usa mousedown em vez de click para evitar race condition com innerHTML re-render
+  // (click dispara APÓS mouseup, mas nesse ponto o renderCalendar() já removeu o target do DOM)
+  document.addEventListener('mousedown', (e) => {
     if (!calWrap || calWrap.classList.contains('hidden')) return;
     const customBtn = document.querySelector('[data-period="custom"]');
     if (calWrap.contains(e.target) || customBtn?.contains(e.target)) return;

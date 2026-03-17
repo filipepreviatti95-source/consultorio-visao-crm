@@ -734,9 +734,23 @@ input, select, textarea { font-family: inherit; }
   color: var(--text-muted);
   font-weight: 500;
 }
+.cal-footer-actions {
+  display: flex;
+  gap: .35rem;
+  align-items: center;
+}
 .cal-clear-btn {
   font-size: .72rem;
   padding: .2rem .5rem;
+}
+.cal-confirm-btn {
+  font-size: .72rem;
+  padding: .25rem .7rem;
+}
+.cal-confirm-btn:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* Métricas */
@@ -1122,6 +1136,8 @@ input, select, textarea { font-family: inherit; }
   padding: .65rem;
   display: flex;
   flex-direction: column;
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
   gap: .6rem;
   min-height: 80px;
 }

@@ -9,6 +9,18 @@ import { fetchConversasPaciente } from './api.js';
 
 let onDataChange = null; // callback injetado pelo app.js pra re-render
 
+// Debounce para re-fetch de chat (evita flood quando chegam muitas msgs de uma vez)
+let chatRefreshTimer = null;
+function debouncedChatRefresh(paciente) {
+  clearTimeout(chatRefreshTimer);
+  chatRefreshTimer = setTimeout(() => {
+    fetchConversasPaciente(paciente.id, paciente.telefone).then(msgs => {
+      State.conversas = msgs;
+      renderChatMessages(msgs);
+    });
+  }, 300);
+}
+
 export function setOnDataChange(fn) {
   onDataChange = fn;
 }
@@ -93,7 +105,7 @@ function handleConversaInsert(payload) {
     sendBrowserNotification('Nova Mensagem', `${nome}: ${(nova.mensagem || '').slice(0, 80)}`);
   }
 
-  // Atualiza chat aberto (por ID ou telefone) — re-fetch completo
+  // Atualiza chat aberto (por ID ou telefone) — re-fetch com debounce
   if (State.currentChatPaciente) {
     const p = State.currentChatPaciente;
     const nums = (p.telefone || '').replace(/\D/g, '');
@@ -101,11 +113,8 @@ function handleConversaInsert(payload) {
     const mesmoId  = nova.paciente_id === p.id;
     const mesmoTel = novaNums && nums && (novaNums.endsWith(nums) || nums.endsWith(novaNums));
     if (mesmoId || mesmoTel) {
-      // Re-fetch conversas completas do paciente (não só a genérica)
-      fetchConversasPaciente(p.id, p.telefone).then(msgs => {
-        State.conversas = msgs;
-        renderChatMessages(msgs);
-      });
+      // Debounce re-fetch para evitar flood (100 msgs = 100 fetches simultâneos)
+      debouncedChatRefresh(p);
     }
   }
 
