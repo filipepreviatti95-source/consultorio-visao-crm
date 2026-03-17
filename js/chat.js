@@ -4,7 +4,7 @@
 
 import { State } from './config.js';
 import { iniciais, waLink, esc, fmtData, tempoDesde, toast } from './utils.js';
-import { fetchConversasPaciente, insertConversa } from './api.js';
+import { fetchConversasPaciente, insertConversa, sendWhatsApp } from './api.js';
 
 export function initChatPanel() {
   document.getElementById('chat-close').addEventListener('click', closeChatPanel);
@@ -93,13 +93,21 @@ async function sendChatMessage() {
   input.style.height = 'auto';
 
   try {
+    // 1. Salva no Supabase (aparece no CRM imediatamente via Realtime)
     await insertConversa(paciente.id, paciente.telefone, msg);
+
+    // 2. Re-renderiza chat local
     const msgs = await fetchConversasPaciente(paciente.id, paciente.telefone);
     State.conversas = msgs;
     renderChatMessages(msgs);
-    toast('Mensagem registrada', 'success', 2000);
+
+    // 3. Envia via WhatsApp (async — não bloqueia UI)
+    sendWhatsApp(paciente.telefone, msg)
+      .then(() => toast('Mensagem enviada via WhatsApp ✓', 'success', 3000))
+      .catch(() => toast('Salvo no CRM, mas falha ao enviar WhatsApp (janela 24h pode ter expirado)', 'warning', 5000));
+
   } catch (err) {
-    toast(`Erro ao enviar: ${err.message}`, 'error');
+    toast(`Erro ao salvar: ${err.message}`, 'error');
     input.value = msg;
   }
 }

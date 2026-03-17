@@ -189,6 +189,29 @@ export async function fetchBotStats(range) {
   };
 }
 
+// ── WhatsApp — Enviar mensagem via n8n webhook ──
+
+const WA_SEND_WEBHOOK = 'https://n8n.srv1474226.hstgr.cloud/webhook/crm-send-whatsapp';
+
+export async function sendWhatsApp(telefone, mensagem) {
+  try {
+    const res = await fetch(WA_SEND_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telefone, mensagem }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`WhatsApp API error: ${res.status} — ${err}`);
+    }
+    const json = await res.json();
+    return json.ok !== false; // true se enviou
+  } catch (err) {
+    console.error('sendWhatsApp error:', err);
+    throw err;
+  }
+}
+
 // ── Google Calendar Sync ──
 
 const GCAL_WEBHOOK = 'https://n8n.srv1474226.hstgr.cloud/webhook/gcal-sync';
