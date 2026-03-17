@@ -151,6 +151,36 @@ export async function insertConversa(pacienteId, telefone, mensagem) {
   if (error) throw error;
 }
 
+// ── Bot Stats ──
+
+export async function fetchBotStats() {
+  const hoje = new Date();
+  const hojeStr = hoje.toISOString().slice(0, 10);
+
+  // Conta mensagens do assistente (bot) de hoje
+  const { count: botHoje, error: e1 } = await db
+    .from('conversas')
+    .select('*', { count: 'exact', head: true })
+    .eq('remetente', 'assistente')
+    .gte('created_at', hojeStr + 'T00:00:00')
+    .lt('created_at', hojeStr + 'T23:59:59.999');
+
+  // Conta pacientes únicos que o bot atendeu hoje
+  const { data: botPacientes, error: e2 } = await db
+    .from('conversas')
+    .select('telefone')
+    .eq('remetente', 'assistente')
+    .gte('created_at', hojeStr + 'T00:00:00')
+    .lt('created_at', hojeStr + 'T23:59:59.999');
+
+  const pacientesUnicos = new Set((botPacientes || []).map(c => c.telefone)).size;
+
+  return {
+    mensagensHoje: botHoje || 0,
+    pacientesAtendidos: pacientesUnicos,
+  };
+}
+
 // ── Google Calendar Sync ──
 
 const GCAL_WEBHOOK = 'https://n8n.srv1474226.hstgr.cloud/webhook/gcal-sync';
