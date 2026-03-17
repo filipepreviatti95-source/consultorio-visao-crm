@@ -3,7 +3,8 @@
  */
 
 import { db, State } from './config.js';
-import { iniciais } from './utils.js';
+import { iniciais, toast } from './utils.js';
+import { openModal, closeModal } from './ui.js';
 import { stopDashboardPolling } from './dashboard.js';
 
 let onAppInit = null; // callback injetado pelo app.js
@@ -48,9 +49,18 @@ export function initAuth() {
     input.type = input.type === 'password' ? 'text' : 'password';
   });
 
+  // Esqueci minha senha — toggle entre formulários
+  initForgotPassword();
+
   // Verifica sessão + escuta mudanças
   checkSession();
-  db.auth.onAuthStateChange((_event, session) => {
+  db.auth.onAuthStateChange((event, session) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      // Usuário clicou no link de reset — mostrar modal de nova senha
+      if (session) onLogin(session.user);
+      setTimeout(() => showChangePasswordModal(), 500);
+      return;
+    }
     session ? onLogin(session.user) : onLogout();
   });
 }
@@ -101,6 +111,129 @@ function onLogout() {
 function showLoginScreen() {
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('app').classList.add('hidden');
+}
+
+// ── Esqueci minha senha ──
+
+function initForgotPassword() {
+  const forgotLink   = document.getElementById('forgot-password-link');
+  const backLink     = document.getElementById('back-to-login');
+  const loginForm    = document.getElementById('login-form');
+  const forgotForm   = document.getElementById('forgot-form');
+  const forgotWrap   = document.querySelector('.login-forgot-wrap');
+  const loginHeading = document.querySelector('.login-heading');
+  const loginDesc    = document.querySelector('.login-desc');
+
+  if (!forgotLink || !forgotForm) return;
+
+  // Mostra formulário de reset
+  forgotLink.addEventListener('click', () => {
+    loginForm.classList.add('hidden');
+    forgotWrap.classList.add('hidden');
+    forgotForm.classList.remove('hidden');
+    loginHeading.textContent = 'Recuperar senha';
+    loginDesc.textContent = 'Enviaremos um link para seu e-mail';
+    document.getElementById('forgot-email').focus();
+    // Limpa estados anteriores
+    document.getElementById('forgot-error').classList.add('hidden');
+    document.getElementById('forgot-success').classList.add('hidden');
+  });
+
+  // Volta pro login
+  backLink.addEventListener('click', () => {
+    forgotForm.classList.add('hidden');
+    loginForm.classList.remove('hidden');
+    forgotWrap.classList.remove('hidden');
+    loginHeading.textContent = 'Bem-vindo de volta';
+    loginDesc.textContent = 'Acesse o painel de gestão do consultório';
+  });
+
+  // Submit do reset
+  forgotForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email   = document.getElementById('forgot-email').value.trim();
+    const btn     = document.getElementById('forgot-btn');
+    const errEl   = document.getElementById('forgot-error');
+    const succEl  = document.getElementById('forgot-success');
+
+    if (!email) return;
+
+    btn.querySelector('.btn-text').classList.add('hidden');
+    btn.querySelector('.btn-loading').classList.remove('hidden');
+    btn.disabled = true;
+    errEl.classList.add('hidden');
+    succEl.classList.add('hidden');
+
+    try {
+      const { error } = await db.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + window.location.pathname,
+      });
+      if (error) throw error;
+
+      succEl.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"><polyline points="20 6 9 17 4 12"/></svg>
+        Link enviado! Verifique sua caixa de entrada.`;
+      succEl.classList.remove('hidden');
+      btn.querySelector('.btn-text').textContent = 'Reenviar link';
+    } catch (err) {
+      errEl.textContent = traduzErroReset(err.message);
+      errEl.classList.remove('hidden');
+    } finally {
+      btn.querySelector('.btn-text').classList.remove('hidden');
+      btn.querySelector('.btn-loading').classList.add('hidden');
+      btn.disabled = false;
+    }
+  });
+}
+
+// ── Modal Trocar Senha (pós-reset) ──
+
+function showChangePasswordModal() {
+  const body = `
+    <p style="color:var(--text-secondary);margin-bottom:1rem">Defina sua nova senha para continuar.</p>
+    <div class="form-group">
+      <label>Nova senha</label>
+      <input type="password" id="mf-new-password" placeholder="Mínimo 6 caracteres" minlength="6" required />
+    </div>
+    <div class="form-group">
+      <label>Confirmar senha</label>
+      <input type="password" id="mf-confirm-password" placeholder="Repita a senha" minlength="6" required />
+    </div>`;
+
+  openModal({
+    title: 'Definir Nova Senha',
+    body,
+    confirmText: 'Salvar Senha',
+    onConfirm: async () => {
+      const newPass    = document.getElementById('mf-new-password').value;
+      const confirmPass = document.getElementById('mf-confirm-password').value;
+
+      if (!newPass || newPass.length < 6) {
+        toast('Senha deve ter no mínimo 6 caracteres', 'warning');
+        return;
+      }
+      if (newPass !== confirmPass) {
+        toast('As senhas não coincidem', 'warning');
+        return;
+      }
+
+      try {
+        const { error } = await db.auth.updateUser({ password: newPass });
+        if (error) throw error;
+        closeModal();
+        toast('Senha alterada com sucesso!', 'success');
+      } catch (err) {
+        toast(`Erro ao alterar senha: ${err.message}`, 'error');
+      }
+    },
+  });
+}
+
+function traduzErroReset(msg) {
+  if (!msg) return 'Erro desconhecido';
+  if (msg.includes('rate limit') || msg.includes('Too many')) return 'Muitas tentativas. Aguarde alguns minutos.';
+  if (msg.includes('not found') || msg.includes('User not found')) return 'E-mail não encontrado no sistema.';
+  return msg;
 }
 
 function traduzErroAuth(msg) {
