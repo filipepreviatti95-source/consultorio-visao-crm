@@ -20,6 +20,14 @@ export function initChatPanel() {
   closeEl.addEventListener('click', closeChatPanel);
   overlayEl.addEventListener('click', closeChatPanel);
 
+  // Clique fora do modal (no padding do chat-panel) também fecha
+  const panelEl = document.getElementById('chat-panel');
+  if (panelEl) {
+    panelEl.addEventListener('click', (e) => {
+      if (e.target === panelEl) closeChatPanel();
+    });
+  }
+
   sendBtn.addEventListener('click', sendChatMessage);
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
@@ -38,17 +46,18 @@ export async function openChatPanel(paciente) {
   document.getElementById('chat-patient-phone').textContent = paciente.telefone;
   document.getElementById('chat-wa-link').href              = waLink(paciente.telefone);
 
-  document.getElementById('chat-status-bar').innerHTML = `
-    <span>Status:</span>
+  const statusBar = document.getElementById('chat-status-bar');
+  if (statusBar) statusBar.innerHTML = `
     <span class="status-pill status-${esc(paciente.status)}">${esc(paciente.status)}</span>
-    <span style="flex:1"></span>
-    <span style="font-size:.75rem;color:var(--text-muted)">Paciente desde ${esc(fmtData(paciente.created_at))}</span>`;
+    <span style="font-size:.72rem">Desde ${esc(fmtData(paciente.created_at))}</span>`;
 
   const msgContainer = document.getElementById('chat-messages');
   msgContainer.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text-muted);font-size:.8rem">Carregando…</div>';
 
   document.getElementById('chat-panel').classList.add('open');
   document.getElementById('chat-overlay').style.display = 'block';
+  // Foco no input após abertura
+  setTimeout(() => document.getElementById('chat-input')?.focus(), 350);
 
   try {
     const msgs = await fetchConversasPaciente(paciente.id, paciente.telefone);
