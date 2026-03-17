@@ -286,8 +286,13 @@ export function initDashboardFilters() {
       const end = new Date();
       end.setDate(end.getDate() + 30);
       const result = await syncGcalToSupabase(start.toISOString(), end.toISOString());
-      const msg = result.criados > 0 || result.atualizados > 0
-        ? `Sincronizado! ${result.criados} novos, ${result.atualizados} atualizados`
+      const partes = [];
+      if (result.criados > 0) partes.push(`${result.criados} novos`);
+      if (result.atualizados > 0) partes.push(`${result.atualizados} atualizados`);
+      if (result.removidos > 0) partes.push(`${result.removidos} removidos do GCal`);
+      if (result.dupsLimpas > 0) partes.push(`${result.dupsLimpas} duplicatas limpas`);
+      const msg = partes.length > 0
+        ? `Sincronizado! ${partes.join(', ')}`
         : `Tudo sincronizado (${result.total} eventos no Google)`;
       renderDashboardMetrics();
       renderDashboardAgenda();
@@ -427,13 +432,24 @@ export function renderDashboardAgenda() {
     titleEl.innerHTML = svgIcon + (titles[currentPeriod] || 'Agenda');
   }
 
-  const lista = State.agendamentos
+  // Filtra, deduplica por google_event_id, e ordena
+  const listaRaw = State.agendamentos
     .filter(a => {
       if (!a.data_hora || a.status === 'cancelado') return false;
       const t = new Date(a.data_hora).getTime();
       return t >= startT && t < endT;
     })
     .sort((a, b) => new Date(a.data_hora) - new Date(b.data_hora));
+
+  // Dedup: se dois agendamentos têm o mesmo google_event_id, mantém só o primeiro
+  const vistos = new Set();
+  const lista = listaRaw.filter(a => {
+    if (a.google_event_id) {
+      if (vistos.has(a.google_event_id)) return false;
+      vistos.add(a.google_event_id);
+    }
+    return true;
+  });
 
   if (lista.length === 0) {
     container.innerHTML = `

@@ -206,9 +206,13 @@ export async function sendWhatsApp(telefone, mensagem) {
 const GCAL_WEBHOOK = 'https://n8n.srv1474226.hstgr.cloud/webhook/gcal-sync';
 const GCAL_FETCH   = 'https://n8n.srv1474226.hstgr.cloud/webhook/gcal-fetch';
 
-/** Busca eventos do Google Calendar via n8n e sincroniza com Supabase */
+/**
+ * Busca eventos do Google Calendar via n8n e sincroniza com Supabase.
+ * v2 — reverse sync, dedup, anti-reimport
+ */
 export async function syncGcalToSupabase(dataInicio, dataFim) {
   try {
+    // 1. Busca eventos do GCal via n8n webhook
     const res = await fetch(GCAL_FETCH, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -219,18 +223,73 @@ export async function syncGcalToSupabase(dataInicio, dataFim) {
     if (!json.ok) throw new Error(json.erro || 'Erro desconhecido');
 
     const eventosGcal = json.eventos || [];
-    let criados = 0, atualizados = 0;
+    let criados = 0, atualizados = 0, removidos = 0, dupsLimpas = 0;
 
+    // Set de google_event_ids vindos do GCal (fonte de verdade)
+    const gcalIds = new Set(eventosGcal.filter(e => e.googleEventId).map(e => e.googleEventId));
+
+    // 2. Busca TODOS agendamentos do Supabase que têm google_event_id no range
+    const { data: agSupabase } = await db
+      .from('agendamentos')
+      .select('id, google_event_id, status, data_hora, nome_paciente')
+      .not('google_event_id', 'is', null)
+      .gte('data_hora', dataInicio)
+      .lte('data_hora', dataFim);
+
+    const agendamentosDb = agSupabase || [];
+
+    // 3. DEDUP — agrupa por google_event_id, deleta extras
+    const porGcalId = {};
+    for (const ag of agendamentosDb) {
+      if (!ag.google_event_id) continue;
+      if (!porGcalId[ag.google_event_id]) porGcalId[ag.google_event_id] = [];
+      porGcalId[ag.google_event_id].push(ag);
+    }
+
+    for (const [gid, registros] of Object.entries(porGcalId)) {
+      if (registros.length > 1) {
+        // Mantém o primeiro, deleta o resto
+        const [manter, ...extras] = registros;
+        for (const dup of extras) {
+          await db.from('agendamentos').delete().eq('id', dup.id);
+          dupsLimpas++;
+        }
+        console.log(`[GCal Sync] Dedup: manteve ${manter.id}, removeu ${extras.length} duplicatas de ${gid}`);
+      }
+    }
+
+    // 4. REVERSE SYNC — agendamentos no Supabase que NÃO existem mais no GCal
+    //    (foram deletados/cancelados no Google Calendar)
+    //    Só remove se tem google_event_id e NÃO está no set do GCal
+    for (const ag of agendamentosDb) {
+      if (!ag.google_event_id) continue;
+      // Já foi deletado como duplicata? Pula
+      if (porGcalId[ag.google_event_id]?.length > 1 &&
+          porGcalId[ag.google_event_id][0].id !== ag.id) continue;
+
+      if (!gcalIds.has(ag.google_event_id)) {
+        // Evento sumiu do GCal → cancela no Supabase (não deleta, para manter histórico)
+        if (ag.status !== 'cancelado') {
+          await db.from('agendamentos').update({
+            status: 'cancelado',
+            observacoes: '(cancelado — removido do Google Calendar)',
+            updated_at: new Date().toISOString(),
+          }).eq('id', ag.id);
+          removidos++;
+          console.log(`[GCal Sync] Reverse: cancelou ${ag.nome_paciente} (${ag.google_event_id}) — não existe mais no GCal`);
+        }
+      }
+    }
+
+    // 5. FORWARD SYNC — cria/atualiza do GCal → Supabase
     for (const ev of eventosGcal) {
       if (!ev.googleEventId || !ev.dataHora) continue;
 
-      // Busca por google_event_id — usa .limit(1) em vez de .maybeSingle()
-      // para evitar erro quando já existem duplicatas
+      // Busca TODOS registros com esse google_event_id (sem limit)
       const { data: existentes } = await db
         .from('agendamentos')
         .select('id, status, data_hora')
-        .eq('google_event_id', ev.googleEventId)
-        .limit(1);
+        .eq('google_event_id', ev.googleEventId);
 
       const existente = existentes?.[0] || null;
 
@@ -247,7 +306,7 @@ export async function syncGcalToSupabase(dataInicio, dataFim) {
           atualizados++;
         }
       } else {
-        // Cria novo agendamento — unique constraint previne duplicata
+        // Cria novo agendamento
         let pacienteId = null;
         if (ev.telefone) {
           const { data: pacs } = await db
@@ -269,11 +328,10 @@ export async function syncGcalToSupabase(dataInicio, dataFim) {
         });
 
         if (insertErr) {
-          // Unique constraint violation = duplicata, ignora
           if (insertErr.code === '23505') {
-            console.warn('[GCal] Duplicate ignored:', ev.googleEventId);
+            console.warn('[GCal Sync] Duplicate ignored:', ev.googleEventId);
           } else {
-            console.error('[GCal] Insert error:', insertErr);
+            console.error('[GCal Sync] Insert error:', insertErr);
           }
         } else {
           criados++;
@@ -281,9 +339,12 @@ export async function syncGcalToSupabase(dataInicio, dataFim) {
       }
     }
 
-    // Re-fetch agendamentos do Supabase para atualizar State
+    // 6. Re-fetch agendamentos do Supabase para atualizar State
     await fetchAgendamentos();
-    return { total: eventosGcal.length, criados, atualizados };
+
+    const resultado = { total: eventosGcal.length, criados, atualizados, removidos, dupsLimpas };
+    console.log('[GCal Sync] Resultado:', resultado);
+    return resultado;
   } catch (err) {
     console.error('syncGcalToSupabase error:', err);
     throw err;

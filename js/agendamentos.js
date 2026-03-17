@@ -34,8 +34,13 @@ function setupAgendamentosNav() {
       const start = new Date(); start.setDate(start.getDate() - 30);
       const end = new Date(); end.setDate(end.getDate() + 60);
       const result = await syncGcalToSupabase(start.toISOString(), end.toISOString());
-      const msg = result.criados > 0 || result.atualizados > 0
-        ? `Sincronizado! ${result.criados} novos, ${result.atualizados} atualizados`
+      const partes = [];
+      if (result.criados > 0) partes.push(`${result.criados} novos`);
+      if (result.atualizados > 0) partes.push(`${result.atualizados} atualizados`);
+      if (result.removidos > 0) partes.push(`${result.removidos} removidos do GCal`);
+      if (result.dupsLimpas > 0) partes.push(`${result.dupsLimpas} duplicatas limpas`);
+      const msg = partes.length > 0
+        ? `Sincronizado! ${partes.join(', ')}`
         : `Tudo sincronizado (${result.total} eventos)`;
       renderAgendamentos();
       toast(msg, 'success', 4000);
@@ -74,9 +79,19 @@ export function renderAgendamentos() {
     ? 'Esta semana'
     : `${fmtData(inicio)} – ${fmtData(fim)}`;
 
-  const agSemana = State.agendamentos
+  const agSemanaRaw = State.agendamentos
     .filter(a => { const d = new Date(a.data_hora); return d >= inicio && d <= fim; })
     .sort((a, b) => new Date(a.data_hora) - new Date(b.data_hora));
+
+  // Dedup por google_event_id (previne duplicatas visuais)
+  const vistos = new Set();
+  const agSemana = agSemanaRaw.filter(a => {
+    if (a.google_event_id) {
+      if (vistos.has(a.google_event_id)) return false;
+      vistos.add(a.google_event_id);
+    }
+    return true;
+  });
 
   const porDia = {};
   agSemana.forEach(ag => {
@@ -360,21 +375,28 @@ async function handleSaveAgendamento(id, googleEventIdAtual) {
 
     closeModal();
     toast(id ? 'Agendamento atualizado!' : 'Agendamento criado!', 'success');
+
+    // Sync Google Calendar — await para evitar race condition com sync manual
+    const acaoGcal = status === 'cancelado' ? 'cancelar' : (id ? 'atualizar' : 'criar');
+    try {
+      const gEventId = await sincronizarGcal({
+        acao: acaoGcal,
+        googleEventId: googleEventIdAtual || null,
+        nome, telefone, dataHora: dataHoraISO, obs, status,
+      });
+      if (gEventId && savedData?.id) {
+        await updateAgendamentoField(savedData.id, 'google_event_id', gEventId);
+        toast('Sincronizado com Google Calendar ✓', 'success', 2000);
+      } else if (!gEventId && acaoGcal === 'criar') {
+        console.warn('[Agendamentos] GCal sync não retornou eventId');
+      }
+    } catch (gcalErr) {
+      console.warn('[Agendamentos] GCal sync error (best-effort):', gcalErr);
+    }
+
     renderAgendamentos();
     renderDashboardAgendamentos();
     renderDashboardMetrics();
-
-    // Sync Google Calendar (async, não bloqueia)
-    const acaoGcal = status === 'cancelado' ? 'cancelar' : (id ? 'atualizar' : 'criar');
-    sincronizarGcal({ acao: acaoGcal, googleEventId: googleEventIdAtual || null, nome, telefone, dataHora: dataHoraISO, obs, status })
-      .then(gEventId => {
-        if (gEventId && savedData?.id) {
-          updateAgendamentoField(savedData.id, 'google_event_id', gEventId);
-          toast('Sincronizado com Google Calendar ✓', 'success', 2000);
-        } else if (!gEventId && acaoGcal === 'criar') {
-          console.warn('[Agendamentos] GCal sync não retornou eventId');
-        }
-      });
   } catch (err) {
     toast(`Erro: ${err.message}`, 'error');
   }
@@ -391,9 +413,19 @@ export function filtrarAgendamentosPorData() {
   const fim    = new Date(dataFim + 'T23:59:59');
   if (inicio > fim) { toast('Data inicial deve ser anterior à data final', 'error'); return; }
 
-  const filtrados = State.agendamentos
+  const filtradosRaw = State.agendamentos
     .filter(a => { const d = new Date(a.data_hora); return d >= inicio && d <= fim; })
     .sort((a, b) => new Date(a.data_hora) - new Date(b.data_hora));
+
+  // Dedup por google_event_id
+  const vistosF = new Set();
+  const filtrados = filtradosRaw.filter(a => {
+    if (a.google_event_id) {
+      if (vistosF.has(a.google_event_id)) return false;
+      vistosF.add(a.google_event_id);
+    }
+    return true;
+  });
 
   const container = document.getElementById('agendamentos-container');
   document.getElementById('semana-label').textContent = `${fmtData(inicio)} – ${fmtData(fim)} (${filtrados.length} resultados)`;
