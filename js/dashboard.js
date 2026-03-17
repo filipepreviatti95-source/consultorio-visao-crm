@@ -296,6 +296,8 @@ export function initDashboardFilters() {
 
 // ── Load ──
 
+let feedPollInterval = null;
+
 export async function loadDashboard() {
   await Promise.all([fetchPacientes(), fetchAgendamentos(), fetchConversasRecentes()]);
   renderDashboardMetrics();
@@ -304,6 +306,17 @@ export async function loadDashboard() {
 
   // Bot stats async (não bloqueia render)
   fetchBotStats(getPeriodRange()).then(stats => renderBotMetric(stats)).catch(() => {});
+
+  // Polling fallback: atualiza feed de conversas a cada 30s
+  // (garante atualização mesmo se Realtime falhar)
+  clearInterval(feedPollInterval);
+  feedPollInterval = setInterval(async () => {
+    if (State.currentPage !== 'dashboard') return;
+    try {
+      await fetchConversasRecentes();
+      renderDashboardFeed();
+    } catch { /* silencioso */ }
+  }, 30000);
 }
 
 /** Re-render tudo com novo período (sem re-fetch, dados já em memória) */

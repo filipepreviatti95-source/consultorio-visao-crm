@@ -5,6 +5,7 @@
 
 import { State } from './config.js';
 import { fetchConversasRecentes } from './api.js';
+import { unlockAudio } from './utils.js';
 
 // Auth
 import { initAuth, setOnAppInit, setupLogout } from './auth.js';
@@ -30,6 +31,9 @@ import { loadAgendamentos, renderAgendamentos, filtrarAgendamentosPorData, expor
 // ── Callback: após login bem-sucedido ──
 
 setOnAppInit(async () => {
+  // Desbloqueia AudioContext na primeira interação (autoplay policy)
+  unlockAudio();
+
   // Inicializa UI
   initNavigation();
   initSidebar();
@@ -86,8 +90,12 @@ setOnDataChange(async (tabela) => {
   }
 
   if (tabela === 'conversas') {
-    await fetchConversasRecentes();
-    if (page === 'dashboard') renderDashboardFeed();
+    try {
+      await fetchConversasRecentes();
+      renderDashboardFeed(); // Atualiza sempre (DOM só muda se elementos existem)
+    } catch (e) {
+      console.warn('Erro ao atualizar feed de conversas:', e);
+    }
   }
 });
 

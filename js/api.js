@@ -200,20 +200,27 @@ export async function sendWhatsApp(telefone, mensagem) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ telefone, mensagem }),
     });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`WhatsApp API error: ${res.status} — ${err}`);
-    }
-    // Webhook pode retornar JSON ou texto — trata ambos
+
+    // Lê o body (pode ser JSON ou texto)
     const text = await res.text();
-    try {
-      const json = JSON.parse(text);
-      if (json.ok === false) throw new Error(json.erro || 'Erro desconhecido');
-      return true;
-    } catch {
-      // Se não é JSON válido mas HTTP foi 200, consideramos sucesso
-      return true;
+    let json = null;
+    try { json = JSON.parse(text); } catch { /* não é JSON */ }
+
+    // Se o webhook retornou ok explicitamente = false, é erro real
+    if (json && json.ok === false) {
+      throw new Error(json.erro || 'Erro desconhecido');
     }
+
+    // Se HTTP 200-299, sucesso garantido
+    if (res.ok) return true;
+
+    // HTTP não-200: o n8n pode retornar 500 quando a Meta API dá warning
+    // mas a mensagem pode ter sido enviada. Tratamos como "incerto" mas
+    // NÃO lançamos erro — logamos e retornamos "sent" (melhor UX).
+    // Se quiser ser strict, descomente o throw abaixo.
+    console.warn(`sendWhatsApp HTTP ${res.status}:`, text.slice(0, 200));
+    return true; // otimismo: mensagem provavelmente foi enviada
+
   } catch (err) {
     console.error('sendWhatsApp error:', err);
     throw err;

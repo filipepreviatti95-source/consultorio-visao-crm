@@ -112,10 +112,49 @@ export function setSoundEnabled(val) {
   localStorage.setItem('soundEnabled', val ? 'true' : 'false');
 }
 
+/**
+ * AudioContext singleton — browsers bloqueiam AudioContext até que
+ * haja interação do usuário (click/tap). Criamos UMA VEZ e reusamos.
+ */
+let _audioCtx = null;
+function getAudioCtx() {
+  if (!_audioCtx) {
+    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  // Resumir se estava suspended (política de autoplay)
+  if (_audioCtx.state === 'suspended') {
+    _audioCtx.resume();
+  }
+  return _audioCtx;
+}
+
+/** Desbloqueia AudioContext na primeira interação do usuário */
+export function unlockAudio() {
+  const unlock = () => {
+    try {
+      const ctx = getAudioCtx();
+      if (ctx.state === 'suspended') ctx.resume();
+      // Toca um som silencioso para "desbloquear" o contexto
+      const buf = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+    } catch (e) { /* silencioso */ }
+    document.removeEventListener('click', unlock, true);
+    document.removeEventListener('touchstart', unlock, true);
+    document.removeEventListener('keydown', unlock, true);
+  };
+  document.addEventListener('click', unlock, true);
+  document.addEventListener('touchstart', unlock, true);
+  document.addEventListener('keydown', unlock, true);
+}
+
 export function playNotificationSound() {
   if (!isSoundEnabled()) return;
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') { ctx.resume(); return; } // ainda bloqueado
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -127,7 +166,7 @@ export function playNotificationSound() {
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.4);
-  } catch (e) { /* silencioso */ }
+  } catch (e) { console.warn('playNotificationSound error:', e); }
 }
 
 /** Browser push notification */

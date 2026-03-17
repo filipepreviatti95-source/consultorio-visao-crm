@@ -17,17 +17,23 @@ export function initRealtime() {
   const pacientesChannel = db
     .channel('pacientes-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'pacientes' }, handlePacienteChange)
-    .subscribe();
+    .subscribe((status) => {
+      console.log('[Realtime] pacientes channel:', status);
+    });
 
   const agendamentosChannel = db
     .channel('agendamentos-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'agendamentos' }, handleAgendamentoChange)
-    .subscribe();
+    .subscribe((status) => {
+      console.log('[Realtime] agendamentos channel:', status);
+    });
 
   const conversasChannel = db
     .channel('conversas-changes')
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversas' }, handleConversaInsert)
-    .subscribe();
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'conversas' }, handleConversaInsert)
+    .subscribe((status) => {
+      console.log('[Realtime] conversas channel:', status);
+    });
 
   State.realtimeChannels = [pacientesChannel, agendamentosChannel, conversasChannel];
 }
@@ -47,7 +53,9 @@ function handlePacienteChange(payload) {
     State.pacientes = State.pacientes.filter(p => p.id !== old.id);
   }
 
-  if (onDataChange) onDataChange('pacientes');
+  if (onDataChange) {
+    onDataChange('pacientes').catch(e => console.warn('[Realtime] onDataChange error:', e));
+  }
 }
 
 function handleAgendamentoChange(payload) {
@@ -62,10 +70,18 @@ function handleAgendamentoChange(payload) {
     State.agendamentos = State.agendamentos.filter(a => a.id !== old.id);
   }
 
-  if (onDataChange) onDataChange('agendamentos');
+  if (onDataChange) {
+    onDataChange('agendamentos').catch(e => console.warn('[Realtime] onDataChange error:', e));
+  }
 }
 
 function handleConversaInsert(payload) {
+  const { eventType } = payload;
+  console.log('[Realtime] conversa event:', eventType, payload.new?.remetente, payload.new?.id);
+
+  // Só processa INSERTs (ignora updates)
+  if (eventType !== 'INSERT') return;
+
   const nova = payload.new;
   State.conversas.push(nova);
 
@@ -120,5 +136,7 @@ function handleConversaInsert(payload) {
     badge.textContent = '● Nova msg';
   }
 
-  if (onDataChange) onDataChange('conversas');
+  if (onDataChange) {
+    onDataChange('conversas').catch(e => console.warn('[Realtime] onDataChange error:', e));
+  }
 }
