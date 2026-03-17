@@ -293,6 +293,14 @@ export function initDashboardFilters() {
 
 let feedPollInterval = null;
 
+/** Para o polling do feed (chamar ao sair do dashboard) */
+export function stopDashboardPolling() {
+  if (feedPollInterval) {
+    clearInterval(feedPollInterval);
+    feedPollInterval = null;
+  }
+}
+
 export async function loadDashboard() {
   await Promise.all([fetchPacientes(), fetchAgendamentos(), fetchConversasRecentes()]);
   renderDashboardMetrics();
@@ -300,10 +308,12 @@ export async function loadDashboard() {
   renderDashboardFeed();
 
   // Polling fallback: atualiza feed de conversas a cada 30s
-  // (garante atualização mesmo se Realtime falhar)
-  clearInterval(feedPollInterval);
+  stopDashboardPolling();
   feedPollInterval = setInterval(async () => {
-    if (State.currentPage !== 'dashboard') return;
+    if (State.currentPage !== 'dashboard') {
+      stopDashboardPolling();
+      return;
+    }
     try {
       await fetchConversasRecentes();
       renderDashboardFeed();
@@ -340,20 +350,24 @@ export function renderDashboardMetrics() {
     labelEl.textContent = labels[currentPeriod] || 'Consultas';
   }
 
-  // 2. Taxa de Conversão (global, não depende do período)
+  // 2. Taxa de Conversão — pacientes com ≥1 agendamento ativo (não-cancelado)
   const totalContatos = State.pacientes.length;
-  const convertidos = State.pacientes.filter(p =>
-    p.status !== 'novo_contato' && p.status !== 'cancelado'
-  ).length;
+  const pacientesComAgendamento = new Set(
+    State.agendamentos
+      .filter(a => a.paciente_id && a.status !== 'cancelado')
+      .map(a => a.paciente_id)
+  );
+  const convertidos = pacientesComAgendamento.size;
   const taxa = totalContatos > 0 ? Math.round((convertidos / totalContatos) * 100) : 0;
   setMetric('metric-conversao', taxa + '%');
   const subConv = document.getElementById('metric-conversao-sub');
   if (subConv) subConv.textContent = `${convertidos} de ${totalContatos} contatos`;
 
-  // 3. Novos Contatos no período
-  const novosNoPeriodo = State.pacientes.filter(p =>
-    p.status === 'novo_contato' && new Date(p.created_at).getTime() >= startT && new Date(p.created_at).getTime() < endT
-  ).length;
+  // 3. Novos Contatos no período — qualquer paciente criado no range
+  const novosNoPeriodo = State.pacientes.filter(p => {
+    const t = new Date(p.created_at).getTime();
+    return t >= startT && t < endT;
+  }).length;
   setMetric('metric-novos', novosNoPeriodo);
 
   // Label dinâmico novos
@@ -545,7 +559,7 @@ export function renderDashboardFeed() {
   const container = document.getElementById('feed-list');
   if (!container) return;
 
-  const feed = (State.conversasRecentes || []).slice(0, 15);
+  const feed = (State.conversasRecentes || []).slice(0, 12);
 
   if (feed.length === 0) {
     container.innerHTML = `
@@ -586,9 +600,15 @@ export function renderDashboardFeed() {
       if (paciente) {
         openChatPanel(paciente);
       } else {
-        const tel = item.dataset.telefone;
-        const pacByTel = State.pacientes.find(p => p.telefone && p.telefone.includes(tel.replace(/\D/g, '').slice(-8)));
-        if (pacByTel) openChatPanel(pacByTel);
+        const tel = (item.dataset.telefone || '').replace(/\D/g, '');
+        if (tel.length >= 8) {
+          const suffix = tel.slice(-8);
+          const pacByTel = State.pacientes.find(p => {
+            const pNums = (p.telefone || '').replace(/\D/g, '');
+            return pNums.length >= 8 && pNums.endsWith(suffix);
+          });
+          if (pacByTel) openChatPanel(pacByTel);
+        }
       }
     });
   });

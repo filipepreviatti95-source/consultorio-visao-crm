@@ -23,7 +23,7 @@ import { initChatPanel, openChatPanel } from './chat.js';
 import { initRealtime, setOnDataChange } from './realtime.js';
 
 // Páginas
-import { loadDashboard, renderDashboardMetrics, renderDashboardAgenda, renderDashboardAgendamentos, renderDashboardFeed, initDashboardFilters } from './dashboard.js';
+import { loadDashboard, renderDashboardMetrics, renderDashboardAgenda, renderDashboardFeed, initDashboardFilters, stopDashboardPolling } from './dashboard.js';
 import { loadKanban, renderKanban, setOpenModalPaciente } from './kanban.js';
 import { loadPacientes, renderPacientesTable, openModalPaciente, setupNovoPacienteBtns } from './pacientes.js';
 import { loadAgendamentos, renderAgendamentos, filtrarAgendamentosPorData, exportarAgendamentosCSV } from './agendamentos.js';
@@ -67,6 +67,9 @@ setOnAppInit(async () => {
 // ── Callback: carrega dados ao mudar de página ──
 
 setPageLoader(async (page) => {
+  // Limpa polling do dashboard ao sair
+  if (page !== 'dashboard') stopDashboardPolling();
+
   switch (page) {
     case 'dashboard':    await loadDashboard();    break;
     case 'kanban':       await loadKanban();       break;
@@ -83,14 +86,15 @@ setOnDataChange(async (tabela) => {
   if (tabela === 'pacientes') {
     if (page === 'kanban')    renderKanban(State.pacientes);
     if (page === 'pacientes') renderPacientesTable(State.pacientes);
-    renderDashboardMetrics();
+    if (page === 'dashboard') renderDashboardMetrics();
   }
 
   if (tabela === 'agendamentos') {
     if (page === 'agendamentos') renderAgendamentos();
-    if (page === 'dashboard')    renderDashboardAgenda();
-    renderDashboardMetrics();
-    renderDashboardAgendamentos();
+    if (page === 'dashboard') {
+      renderDashboardAgenda();
+      renderDashboardMetrics();
+    }
   }
 
   if (tabela === 'conversas') {
