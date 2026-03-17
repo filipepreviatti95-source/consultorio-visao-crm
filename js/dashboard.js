@@ -5,7 +5,7 @@
 
 import { State } from './config.js';
 import { esc, fmtHora, fmtData, tempoDesde, iniciais, waLink, STATUS_LABEL } from './utils.js';
-import { fetchPacientes, fetchAgendamentos, fetchConversasRecentes, fetchBotStats } from './api.js';
+import { fetchPacientes, fetchAgendamentos, fetchConversasRecentes, fetchBotStats, syncGcalToSupabase } from './api.js';
 import { openChatPanel } from './chat.js';
 
 // ── Estado do filtro de período ──
@@ -81,6 +81,36 @@ export function initDashboardFilters() {
       btn.classList.add('active');
       refreshDashboard();
     });
+  });
+
+  // Botão sincronizar Google Calendar
+  document.getElementById('btn-sync-gcal')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Sincronizando…';
+    try {
+      // Busca 60 dias: 30 passados + 30 futuros
+      const start = new Date();
+      start.setDate(start.getDate() - 30);
+      const end = new Date();
+      end.setDate(end.getDate() + 30);
+      const result = await syncGcalToSupabase(start.toISOString(), end.toISOString());
+      const msg = result.criados > 0 || result.atualizados > 0
+        ? `Sincronizado! ${result.criados} novos, ${result.atualizados} atualizados`
+        : `Tudo sincronizado (${result.total} eventos no Google)`;
+      // Re-render dashboard
+      renderDashboardMetrics();
+      renderDashboardAgenda();
+      // Toast
+      const { toast } = await import('./utils.js');
+      toast(msg, 'success', 4000);
+    } catch (err) {
+      const { toast } = await import('./utils.js');
+      toast(`Erro ao sincronizar: ${err.message}`, 'error', 5000);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:-2px;margin-right:3px"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg> Sincronizar`;
+    }
   });
 
   document.getElementById('period-apply')?.addEventListener('click', () => {

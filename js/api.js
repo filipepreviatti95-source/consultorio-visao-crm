@@ -215,6 +215,79 @@ export async function sendWhatsApp(telefone, mensagem) {
 // ── Google Calendar Sync ──
 
 const GCAL_WEBHOOK = 'https://n8n.srv1474226.hstgr.cloud/webhook/gcal-sync';
+const GCAL_FETCH   = 'https://n8n.srv1474226.hstgr.cloud/webhook/gcal-fetch';
+
+/** Busca eventos do Google Calendar via n8n e sincroniza com Supabase */
+export async function syncGcalToSupabase(dataInicio, dataFim) {
+  try {
+    const res = await fetch(GCAL_FETCH, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dataInicio, dataFim }),
+    });
+    if (!res.ok) throw new Error(`GCal fetch error: ${res.status}`);
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.erro || 'Erro desconhecido');
+
+    const eventosGcal = json.eventos || [];
+    let criados = 0, atualizados = 0;
+
+    for (const ev of eventosGcal) {
+      if (!ev.googleEventId || !ev.dataHora) continue;
+
+      // Verifica se já existe no Supabase por google_event_id
+      const { data: existente } = await db
+        .from('agendamentos')
+        .select('id, status, data_hora')
+        .eq('google_event_id', ev.googleEventId)
+        .maybeSingle();
+
+      if (existente) {
+        // Atualiza status/horário se mudou
+        const mudou = existente.status !== ev.status ||
+          existente.data_hora?.slice(0, 16) !== ev.dataHora?.slice(0, 16);
+        if (mudou) {
+          await db.from('agendamentos').update({
+            status: ev.status,
+            data_hora: ev.dataHora,
+            updated_at: new Date().toISOString(),
+          }).eq('id', existente.id);
+          atualizados++;
+        }
+      } else {
+        // Cria novo agendamento no Supabase a partir do GCal
+        // Tenta encontrar paciente pelo telefone
+        let pacienteId = null;
+        if (ev.telefone) {
+          const { data: pac } = await db
+            .from('pacientes')
+            .select('id')
+            .like('telefone', `%${ev.telefone.slice(-8)}`)
+            .maybeSingle();
+          pacienteId = pac?.id || null;
+        }
+
+        await db.from('agendamentos').insert({
+          paciente_id: pacienteId,
+          nome_paciente: ev.nome || 'Evento GCal',
+          telefone: ev.telefone || '',
+          data_hora: ev.dataHora,
+          status: ev.status || 'agendado',
+          google_event_id: ev.googleEventId,
+          observacoes: ev.isCRM ? '' : '(importado do Google Calendar)',
+        });
+        criados++;
+      }
+    }
+
+    // Re-fetch agendamentos do Supabase para atualizar State
+    await fetchAgendamentos();
+    return { total: eventosGcal.length, criados, atualizados };
+  } catch (err) {
+    console.error('syncGcalToSupabase error:', err);
+    throw err;
+  }
+}
 
 export async function sincronizarGcal({ acao, googleEventId, nome, telefone, dataHora, obs, status }) {
   try {
