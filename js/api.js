@@ -75,11 +75,16 @@ export async function saveAgendamento(id, payload) {
 }
 
 export async function updateAgendamentoField(id, field, value) {
-  const { error } = await db.from('agendamentos').update({ [field]: value }).eq('id', id);
-  if (!error) {
-    const idx = State.agendamentos.findIndex(a => a.id === id);
-    if (idx >= 0) State.agendamentos[idx][field] = value;
-  }
+  const { data, error } = await db
+    .from('agendamentos')
+    .update({ [field]: value, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  const idx = State.agendamentos.findIndex(a => a.id === id);
+  if (idx >= 0) State.agendamentos[idx] = data;
+  return data;
 }
 
 // ── Conversas ──
@@ -151,44 +156,6 @@ export async function insertConversa(pacienteId, telefone, mensagem) {
   if (error) throw error;
 }
 
-// ── Bot Stats ──
-
-export async function fetchBotStats(range) {
-  // Aceita { start: Date, end: Date } — fallback para hoje se não vier
-  let startStr, endStr;
-  if (range && range.start && range.end) {
-    startStr = range.start.toISOString();
-    endStr = range.end.toISOString();
-  } else {
-    const hoje = new Date();
-    startStr = hoje.toISOString().slice(0, 10) + 'T00:00:00';
-    endStr = hoje.toISOString().slice(0, 10) + 'T23:59:59.999';
-  }
-
-  // Conta mensagens do assistente (bot) no período
-  const { count: botCount, error: e1 } = await db
-    .from('conversas')
-    .select('*', { count: 'exact', head: true })
-    .eq('remetente', 'assistente')
-    .gte('created_at', startStr)
-    .lt('created_at', endStr);
-
-  // Conta pacientes únicos que o bot atendeu no período
-  const { data: botPacientes, error: e2 } = await db
-    .from('conversas')
-    .select('telefone')
-    .eq('remetente', 'assistente')
-    .gte('created_at', startStr)
-    .lt('created_at', endStr);
-
-  const pacientesUnicos = new Set((botPacientes || []).map(c => c.telefone)).size;
-
-  return {
-    mensagensHoje: botCount || 0,
-    pacientesAtendidos: pacientesUnicos,
-  };
-}
-
 // ── WhatsApp — Enviar mensagem via n8n webhook ──
 
 const WA_SEND_WEBHOOK = 'https://n8n.srv1474226.hstgr.cloud/webhook/crm-send-whatsapp';
@@ -251,12 +218,15 @@ export async function syncGcalToSupabase(dataInicio, dataFim) {
     for (const ev of eventosGcal) {
       if (!ev.googleEventId || !ev.dataHora) continue;
 
-      // Verifica se já existe no Supabase por google_event_id
-      const { data: existente } = await db
+      // Busca por google_event_id — usa .limit(1) em vez de .maybeSingle()
+      // para evitar erro quando já existem duplicatas
+      const { data: existentes } = await db
         .from('agendamentos')
         .select('id, status, data_hora')
         .eq('google_event_id', ev.googleEventId)
-        .maybeSingle();
+        .limit(1);
+
+      const existente = existentes?.[0] || null;
 
       if (existente) {
         // Atualiza status/horário se mudou
@@ -271,19 +241,18 @@ export async function syncGcalToSupabase(dataInicio, dataFim) {
           atualizados++;
         }
       } else {
-        // Cria novo agendamento no Supabase a partir do GCal
-        // Tenta encontrar paciente pelo telefone
+        // Cria novo agendamento — unique constraint previne duplicata
         let pacienteId = null;
         if (ev.telefone) {
-          const { data: pac } = await db
+          const { data: pacs } = await db
             .from('pacientes')
             .select('id')
             .like('telefone', `%${ev.telefone.slice(-8)}`)
-            .maybeSingle();
-          pacienteId = pac?.id || null;
+            .limit(1);
+          pacienteId = pacs?.[0]?.id || null;
         }
 
-        await db.from('agendamentos').insert({
+        const { error: insertErr } = await db.from('agendamentos').insert({
           paciente_id: pacienteId,
           nome_paciente: ev.nome || 'Evento GCal',
           telefone: ev.telefone || '',
@@ -292,7 +261,17 @@ export async function syncGcalToSupabase(dataInicio, dataFim) {
           google_event_id: ev.googleEventId,
           observacoes: ev.isCRM ? '' : '(importado do Google Calendar)',
         });
-        criados++;
+
+        if (insertErr) {
+          // Unique constraint violation = duplicata, ignora
+          if (insertErr.code === '23505') {
+            console.warn('[GCal] Duplicate ignored:', ev.googleEventId);
+          } else {
+            console.error('[GCal] Insert error:', insertErr);
+          }
+        } else {
+          criados++;
+        }
       }
     }
 

@@ -219,6 +219,9 @@ async function handleSaveAgendamento(id, googleEventIdAtual) {
       .then(gEventId => {
         if (gEventId && savedData?.id) {
           updateAgendamentoField(savedData.id, 'google_event_id', gEventId);
+          toast('Sincronizado com Google Calendar ✓', 'success', 2000);
+        } else if (!gEventId && acaoGcal === 'criar') {
+          console.warn('[Agendamentos] GCal sync não retornou eventId');
         }
       });
   } catch (err) {

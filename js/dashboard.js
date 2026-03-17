@@ -4,8 +4,8 @@
  */
 
 import { State } from './config.js';
-import { esc, fmtHora, fmtData, tempoDesde, iniciais, waLink, STATUS_LABEL } from './utils.js';
-import { fetchPacientes, fetchAgendamentos, fetchConversasRecentes, fetchBotStats, syncGcalToSupabase, updateAgendamentoField, sincronizarGcal } from './api.js';
+import { esc, fmtHora, fmtData, tempoDesde, iniciais, waLink, STATUS_LABEL, toast } from './utils.js';
+import { fetchPacientes, fetchAgendamentos, fetchConversasRecentes, syncGcalToSupabase, updateAgendamentoField, sincronizarGcal } from './api.js';
 import { openChatPanel } from './chat.js';
 
 // ── Estado do filtro de período ──
@@ -259,8 +259,7 @@ export function initDashboardFilters() {
   document.getElementById('btn-limpar-feed')?.addEventListener('click', () => {
     State.conversasRecentes = [];
     renderDashboardFeed();
-    const { toast } = { toast: null }; // lazy import
-    import('./utils.js').then(m => m.toast('Feed de conversas limpo', 'info', 2000));
+    toast('Feed de conversas limpo', 'info', 2000);
   });
 
   // Botão sincronizar Google Calendar
@@ -278,14 +277,10 @@ export function initDashboardFilters() {
       const msg = result.criados > 0 || result.atualizados > 0
         ? `Sincronizado! ${result.criados} novos, ${result.atualizados} atualizados`
         : `Tudo sincronizado (${result.total} eventos no Google)`;
-      // Re-render dashboard
       renderDashboardMetrics();
       renderDashboardAgenda();
-      // Toast
-      const { toast } = await import('./utils.js');
       toast(msg, 'success', 4000);
     } catch (err) {
-      const { toast } = await import('./utils.js');
       toast(`Erro ao sincronizar: ${err.message}`, 'error', 5000);
     } finally {
       btn.disabled = false;
@@ -304,9 +299,6 @@ export async function loadDashboard() {
   renderDashboardAgenda();
   renderDashboardFeed();
 
-  // Bot stats async (não bloqueia render)
-  fetchBotStats(getPeriodRange()).then(stats => renderBotMetric(stats)).catch(() => {});
-
   // Polling fallback: atualiza feed de conversas a cada 30s
   // (garante atualização mesmo se Realtime falhar)
   clearInterval(feedPollInterval);
@@ -323,8 +315,6 @@ export async function loadDashboard() {
 function refreshDashboard() {
   renderDashboardMetrics();
   renderDashboardAgenda();
-  // Bot stats precisa re-fetch (query por data)
-  fetchBotStats(getPeriodRange()).then(stats => renderBotMetric(stats)).catch(() => {});
 }
 
 // ── Métricas ──
@@ -384,12 +374,6 @@ export function renderDashboardMetrics() {
   // Data label no header da agenda
   const dateLabel = document.getElementById('dash-date-label');
   if (dateLabel) dateLabel.textContent = getPeriodLabel();
-}
-
-function renderBotMetric(stats) {
-  setMetric('metric-bot', stats.pacientesAtendidos);
-  const sub = document.getElementById('metric-bot-sub');
-  if (sub) sub.textContent = `${stats.mensagensHoje} msgs enviadas`;
 }
 
 function setMetric(id, value) {
@@ -549,10 +533,8 @@ async function quickUpdateAgStatus(agId, novoStatus) {
     }
     renderDashboardAgenda();
     renderDashboardMetrics();
-    const { toast } = await import('./utils.js');
     toast(novoStatus === 'concluido' ? 'Consulta concluída ✓' : 'Agendamento cancelado', 'success', 2000);
   } catch (err) {
-    const { toast } = await import('./utils.js');
     toast(`Erro: ${err.message}`, 'error');
   }
 }
