@@ -1433,7 +1433,49 @@ input, select, textarea { font-family: inherit; }
 
 .ag-status-pill { flex-shrink: 0; }
 
-.ag-actions { display: flex; gap: .3rem; }
+.ag-actions { display: flex; gap: .3rem; flex-shrink: 0; }
+
+.ag-actions .ag-action-btn {
+  width: 30px; height: 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .82rem;
+  transition: all var(--trans-fast);
+  padding: 0;
+}
+.ag-actions .ag-action-btn:hover {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.ag-actions .ag-action-btn.btn-ag-done:hover { background: var(--color-secondary-light); color: var(--color-secondary); border-color: var(--color-secondary); }
+.ag-actions .ag-action-btn.btn-ag-cancel:hover { background: #FEF2F2; color: var(--status-cancelado); border-color: var(--status-cancelado); }
+.ag-actions .ag-action-btn.btn-ag-delete:hover { background: #FEF2F2; color: var(--status-cancelado); border-color: var(--status-cancelado); }
+
+.agendamento-row.ag-row-cancelado {
+  opacity: .55;
+  background: var(--bg);
+}
+.agendamento-row.ag-row-cancelado .ag-name { text-decoration: line-through; }
+
+.dia-count {
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--text-inverse);
+  background: var(--color-primary);
+  border-radius: 20px;
+  padding: .1rem .5rem;
+  min-width: 20px;
+  text-align: center;
+  line-height: 1.4;
+}
+.dia-hoje .dia-count { background: var(--color-secondary); }
 
 /* ═══════════════════════════════════════════════════════
    CHAT PANEL
@@ -1856,4 +1898,31 @@ input, select, textarea { font-family: inherit; }
 
   .topbar-title { font-size: .88rem; }
   .topbar { gap: .4rem; }
+
+  .ag-actions .ag-action-btn { width: 28px; height: 28px; font-size: .75rem; }
+}
+
+/* ═══════════════════════════════════════════════════════
+   CONFETTI ANIMATION
+══════════════════════════════════════════════════════ */
+.confetti-piece {
+  position: absolute;
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  opacity: 1;
+  pointer-events: none;
+  z-index: 999;
+  animation: confetti-fall var(--duration, 1s) cubic-bezier(.2, .8, .3, 1) forwards;
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(0) translateX(0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(340px) translateX(var(--x, 0)) rotate(var(--r, 360deg)) scale(.4);
+    opacity: 0;
+  }
 }

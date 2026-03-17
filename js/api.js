@@ -87,6 +87,12 @@ export async function updateAgendamentoField(id, field, value) {
   return data;
 }
 
+export async function deleteAgendamento(id) {
+  const { error } = await db.from('agendamentos').delete().eq('id', id);
+  if (error) throw error;
+  State.agendamentos = State.agendamentos.filter(a => a.id !== id);
+}
+
 // ── Conversas ──
 
 export async function fetchConversasRecentes() {

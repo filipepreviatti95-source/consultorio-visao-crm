@@ -1,10 +1,11 @@
 /**
  * agendamentos.js — Agenda semanal, filtro de datas, CSV, modal agendamento
+ * v2 — botões de delete, ações rápidas, sync GCal, UX melhorada
  */
 
 import { State } from './config.js';
 import { esc, fmtData, fmtHora, STATUS_LABEL, STATUS_COLOR, toast } from './utils.js';
-import { fetchAgendamentos, fetchPacientes, saveAgendamento, updateAgendamentoField, sincronizarGcal } from './api.js';
+import { fetchAgendamentos, fetchPacientes, saveAgendamento, deleteAgendamento, updateAgendamentoField, sincronizarGcal, syncGcalToSupabase } from './api.js';
 import { openModal, closeModal } from './ui.js';
 import { renderDashboardAgendamentos, renderDashboardMetrics } from './dashboard.js';
 
@@ -15,10 +16,36 @@ export async function loadAgendamentos() {
   renderAgendamentos();
 }
 
+let agNavSetup = false;
 function setupAgendamentosNav() {
+  if (agNavSetup) return;
+  agNavSetup = true;
   document.getElementById('btn-semana-anterior').onclick = () => { State.semanaOffset--; renderAgendamentos(); };
   document.getElementById('btn-semana-proxima').onclick  = () => { State.semanaOffset++; renderAgendamentos(); };
   document.getElementById('btn-novo-agendamento').onclick = () => openModalAgendamento(null);
+
+  // Sync GCal button
+  document.getElementById('btn-sync-gcal-ag')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    const origHTML = btn.innerHTML;
+    btn.textContent = 'Sincronizando…';
+    try {
+      const start = new Date(); start.setDate(start.getDate() - 30);
+      const end = new Date(); end.setDate(end.getDate() + 60);
+      const result = await syncGcalToSupabase(start.toISOString(), end.toISOString());
+      const msg = result.criados > 0 || result.atualizados > 0
+        ? `Sincronizado! ${result.criados} novos, ${result.atualizados} atualizados`
+        : `Tudo sincronizado (${result.total} eventos)`;
+      renderAgendamentos();
+      toast(msg, 'success', 4000);
+    } catch (err) {
+      toast(`Erro ao sincronizar: ${err.message}`, 'error', 5000);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = origHTML;
+    }
+  });
 }
 
 function getSemanaAtual() {
@@ -38,6 +65,8 @@ export function renderAgendamentos() {
   const { inicio, fim } = getSemanaAtual();
   const container = document.getElementById('agendamentos-container');
   const labelEl   = document.getElementById('semana-label');
+  if (!container || !labelEl) return;
+
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
 
@@ -73,7 +102,7 @@ export function renderAgendamentos() {
 
     html.push(`
       <div class="dia-group ${isHoje ? 'dia-hoje' : ''}">
-        <div class="dia-label">${diaLabel}${isHoje ? ' — hoje' : ''}</div>
+        <div class="dia-label">${diaLabel}${isHoje ? ' — hoje' : ''} <span class="dia-count">(${ags.length})</span></div>
         ${ags.length === 0
           ? `<div style="padding:.3rem 0;color:var(--text-muted);font-size:.82rem">Nenhum agendamento</div>`
           : ags.map(ag => buildAgendamentoRow(ag)).join('')}
@@ -81,19 +110,16 @@ export function renderAgendamentos() {
   }
 
   container.innerHTML = html.join('');
-
-  container.querySelectorAll('.agendamento-row').forEach(row => {
-    row.addEventListener('click', () => {
-      const ag = State.agendamentos.find(a => a.id === row.dataset.id);
-      if (ag) openModalAgendamento(ag);
-    });
-  });
+  bindAgendamentoRowEvents(container);
 }
 
 function buildAgendamentoRow(ag) {
   const cor = STATUS_COLOR[ag.status] || '#0066CC';
+  const isCancelado = ag.status === 'cancelado';
+  const isConcluido = ag.status === 'concluido';
+
   return `
-    <div class="agendamento-row" data-id="${ag.id}">
+    <div class="agendamento-row ${isCancelado ? 'ag-row-cancelado' : ''}" data-id="${ag.id}">
       <div class="ag-status-bar" style="background:${cor}"></div>
       <div class="ag-hora">${fmtHora(ag.data_hora)}</div>
       <div class="ag-info">
@@ -103,11 +129,134 @@ function buildAgendamentoRow(ag) {
       </div>
       <span class="status-pill ag-status-pill status-${ag.status}">${STATUS_LABEL[ag.status] || ag.status}</span>
       <div class="ag-actions">
+        ${!isConcluido && !isCancelado ? `
+        <button class="icon-btn ag-done-btn" data-id="${ag.id}" title="Marcar concluído">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#00A86B" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        </button>` : ''}
+        ${!isCancelado ? `
+        <button class="icon-btn ag-cancel-btn" data-id="${ag.id}" title="Cancelar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>` : ''}
         <button class="icon-btn ag-edit-btn" data-id="${ag.id}" title="Editar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 1 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         </button>
+        <button class="icon-btn ag-delete-btn" data-id="${ag.id}" title="Excluir">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+        </button>
       </div>
     </div>`;
+}
+
+function bindAgendamentoRowEvents(container) {
+  // Click na row → editar
+  container.querySelectorAll('.agendamento-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.icon-btn')) return; // ignora cliques nos botões
+      const ag = State.agendamentos.find(a => a.id === row.dataset.id);
+      if (ag) openModalAgendamento(ag);
+    });
+  });
+
+  // Botão concluir
+  container.querySelectorAll('.ag-done-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      quickUpdateStatus(btn.dataset.id, 'concluido');
+    });
+  });
+
+  // Botão cancelar
+  container.querySelectorAll('.ag-cancel-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (confirm('Cancelar este agendamento?')) {
+        quickUpdateStatus(btn.dataset.id, 'cancelado');
+      }
+    });
+  });
+
+  // Botão editar
+  container.querySelectorAll('.ag-edit-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const ag = State.agendamentos.find(a => a.id === btn.dataset.id);
+      if (ag) openModalAgendamento(ag);
+    });
+  });
+
+  // Botão excluir
+  container.querySelectorAll('.ag-delete-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      confirmarDeleteAgendamento(btn.dataset.id);
+    });
+  });
+}
+
+/** Quick update status + GCal sync (await pra garantir sincronia) */
+async function quickUpdateStatus(agId, novoStatus) {
+  try {
+    await updateAgendamentoField(agId, 'status', novoStatus);
+    const ag = State.agendamentos.find(a => a.id === agId);
+    if (ag) {
+      await sincronizarGcal({
+        acao: novoStatus === 'cancelado' ? 'cancelar' : 'atualizar',
+        googleEventId: ag.google_event_id || null,
+        nome: ag.nome_paciente,
+        telefone: ag.telefone,
+        dataHora: ag.data_hora,
+        obs: ag.observacoes || '',
+        status: novoStatus,
+      });
+    }
+    renderAgendamentos();
+    renderDashboardMetrics();
+    toast(novoStatus === 'concluido' ? 'Consulta concluída ✓' : 'Agendamento cancelado', 'success', 2000);
+  } catch (err) {
+    toast(`Erro: ${err.message}`, 'error');
+  }
+}
+
+/** Confirmar e deletar agendamento */
+function confirmarDeleteAgendamento(id) {
+  const ag = State.agendamentos.find(a => a.id === id);
+  if (!ag) return;
+
+  openModal({
+    title: 'Excluir Agendamento',
+    body: `<p style="color:var(--text-secondary)">Tem certeza que deseja excluir o agendamento de <strong>${esc(ag.nome_paciente)}</strong> em <strong>${fmtData(ag.data_hora)} às ${fmtHora(ag.data_hora)}</strong>?<br>Esta ação não pode ser desfeita.</p>`,
+    confirmText: 'Excluir',
+    onConfirm: async () => {
+      try {
+        // Cancelar no GCal ANTES de deletar — com await pra garantir
+        if (ag.google_event_id) {
+          await sincronizarGcal({
+            acao: 'cancelar',
+            googleEventId: ag.google_event_id,
+            nome: ag.nome_paciente,
+            telefone: ag.telefone,
+            dataHora: ag.data_hora,
+            obs: ag.observacoes || '',
+            status: 'cancelado',
+          });
+        }
+        await deleteAgendamento(id);
+        closeModal();
+        toast('Agendamento excluído (GCal também)', 'success');
+        renderAgendamentos();
+        renderDashboardAgendamentos();
+        renderDashboardMetrics();
+      } catch (err) {
+        toast(`Erro ao excluir: ${err.message}`, 'error');
+      }
+    },
+  });
+
+  // Botão vermelho
+  setTimeout(() => {
+    const confirmBtn = document.getElementById('modal-confirm');
+    if (confirmBtn) confirmBtn.className = 'btn btn-danger';
+  }, 10);
 }
 
 // ── Modal Agendamento ──
@@ -265,12 +414,7 @@ export function filtrarAgendamentosPorData() {
     return `<div class="dia-group"><div class="dia-label">${diaLabel}</div>${ags.map(ag => buildAgendamentoRow(ag)).join('')}</div>`;
   }).join('');
 
-  container.querySelectorAll('.agendamento-row').forEach(row => {
-    row.addEventListener('click', () => {
-      const ag = State.agendamentos.find(a => a.id === row.dataset.id);
-      if (ag) openModalAgendamento(ag);
-    });
-  });
+  bindAgendamentoRowEvents(container);
 }
 
 // ── Exportar CSV ──

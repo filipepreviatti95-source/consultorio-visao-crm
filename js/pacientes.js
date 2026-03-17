@@ -18,7 +18,10 @@ export async function loadPacientes() {
 
 // ── Filtros ──
 
+let pacFilterSetup = false;
 function setupPacientesFilters() {
+  if (pacFilterSetup) return;
+  pacFilterSetup = true;
   const searchInput  = document.getElementById('pacientes-search');
   const statusFilter = document.getElementById('pacientes-filter-status');
 

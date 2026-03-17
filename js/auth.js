@@ -4,6 +4,7 @@
 
 import { db, State } from './config.js';
 import { iniciais } from './utils.js';
+import { stopDashboardPolling } from './dashboard.js';
 
 let onAppInit = null; // callback injetado pelo app.js
 let appInitialized = false; // guard: só roda uma vez
@@ -90,6 +91,7 @@ function onLogin(user) {
 function onLogout() {
   State.user = null;
   appInitialized = false; // permite re-init no próximo login
+  stopDashboardPolling(); // para polling interval do dashboard
   State.realtimeChannels.forEach(ch => db.removeChannel(ch));
   State.realtimeChannels = [];
   document.getElementById('app').classList.add('hidden');

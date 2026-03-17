@@ -83,8 +83,6 @@ function renderSearchResults(q, container) {
 
 // ── Modal Genérico ──
 
-let modalResolve = null;
-
 export function initModal() {
   document.getElementById('modal-close').addEventListener('click', closeModal);
   document.getElementById('modal-cancel').addEventListener('click', closeModal);
@@ -106,7 +104,22 @@ export function openModal({ title, body, confirmText = 'Salvar', cancelText = 'C
   const confirmBtn = document.getElementById('modal-confirm');
   const newConfirm = confirmBtn.cloneNode(true);
   confirmBtn.parentNode.replaceChild(newConfirm, confirmBtn);
-  if (onConfirm) newConfirm.addEventListener('click', onConfirm);
+  newConfirm.className = 'btn btn-primary'; // reset class (remove btn-danger etc)
+
+  if (onConfirm) {
+    newConfirm.addEventListener('click', async () => {
+      // Previne double-click: desabilita e mostra loading
+      newConfirm.disabled = true;
+      const origText = newConfirm.textContent;
+      newConfirm.textContent = 'Salvando…';
+      try {
+        await onConfirm();
+      } finally {
+        newConfirm.disabled = false;
+        newConfirm.textContent = origText;
+      }
+    });
+  }
 
   document.getElementById('modal-overlay').classList.remove('hidden');
   setTimeout(() => {
@@ -117,5 +130,4 @@ export function openModal({ title, body, confirmText = 'Salvar', cancelText = 'C
 
 export function closeModal() {
   document.getElementById('modal-overlay').classList.add('hidden');
-  if (modalResolve) { modalResolve(null); modalResolve = null; }
 }

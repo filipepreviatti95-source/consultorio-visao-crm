@@ -1,5 +1,5 @@
 /**
- * kanban.js — Quadro Kanban com drag & drop
+ * kanban.js — Quadro Kanban com drag & drop + confetti
  */
 
 import { State } from './config.js';
@@ -9,6 +9,7 @@ import { openChatPanel } from './chat.js';
 import { renderDashboardMetrics } from './dashboard.js';
 
 let openModalPacienteFn = null;
+let kanbanDragSetup = false; // evita re-setup do drag&drop a cada render
 
 export function setOpenModalPaciente(fn) {
   openModalPacienteFn = fn;
@@ -18,8 +19,11 @@ export async function loadKanban() {
   if (State.pacientes.length === 0) await fetchPacientes();
   if (State.agendamentos.length === 0) await fetchAgendamentos();
   renderKanban(State.pacientes);
-  setupKanbanDragDrop();
-  setupKanbanCollapseCancel();
+  if (!kanbanDragSetup) {
+    setupKanbanDragDrop();
+    setupKanbanCollapseCancel();
+    kanbanDragSetup = true;
+  }
 }
 
 export function renderKanban(pacientes) {
@@ -28,6 +32,7 @@ export function renderKanban(pacientes) {
   colunas.forEach(status => {
     const colEl   = document.getElementById(`col-${status}`);
     const countEl = document.getElementById(`count-${status}`);
+    if (!colEl || !countEl) return;
     const filtrados = pacientes.filter(p => p.status === status);
 
     countEl.textContent = filtrados.length;
@@ -44,11 +49,12 @@ export function renderKanban(pacientes) {
       const paciente = pacientes.find(px => px.id === id);
       if (!paciente) return;
 
-      card.querySelector('.btn-card-chat')?.addEventListener('click', () => openChatPanel(paciente));
-      card.querySelector('.btn-card-edit')?.addEventListener('click', () => {
+      card.querySelector('.btn-card-chat')?.addEventListener('click', (e) => { e.stopPropagation(); openChatPanel(paciente); });
+      card.querySelector('.btn-card-edit')?.addEventListener('click', (e) => {
+        e.stopPropagation();
         if (openModalPacienteFn) openModalPacienteFn(paciente);
       });
-      card.querySelector('.btn-card-avancar')?.addEventListener('click', () => avancarStatus(paciente));
+      card.querySelector('.btn-card-avancar')?.addEventListener('click', (e) => { e.stopPropagation(); avancarStatus(paciente); });
     });
   });
 }
@@ -119,6 +125,11 @@ async function avancarStatus(paciente) {
     await updatePacienteStatus(paciente.id, proximo);
     renderKanban(State.pacientes);
     toast(`Status atualizado para "${STATUS_LABEL[proximo]}"`, 'success');
+
+    // 🎉 Confetti quando confirmado!
+    if (proximo === 'confirmado') {
+      launchConfetti();
+    }
   } catch (err) {
     toast(`Erro ao atualizar status: ${err.message}`, 'error');
   }
@@ -170,6 +181,11 @@ function setupKanbanDragDrop() {
       await updatePacienteStatus(pacienteId, novoStatus);
       renderKanban(State.pacientes);
       toast(`Status atualizado para "${STATUS_LABEL[novoStatus]}"`, 'success');
+
+      // 🎉 Confetti quando confirmado!
+      if (novoStatus === 'confirmado') {
+        launchConfetti();
+      }
     } catch (err) {
       toast(`Erro: ${err.message}`, 'error');
     }
@@ -182,4 +198,31 @@ function setupKanbanCollapseCancel() {
   toggle.addEventListener('click', () => {
     toggle.closest('.kanban-col').classList.toggle('collapsed');
   });
+}
+
+// ── Confetti 🎉 ──
+
+function launchConfetti() {
+  const container = document.getElementById('kanban-board') || document.body;
+  const colors = ['#00A86B', '#0066CC', '#F59E0B', '#EF4444', '#7C3AED', '#EC4899'];
+  const count = 60;
+
+  for (let i = 0; i < count; i++) {
+    const confetto = document.createElement('div');
+    confetto.className = 'confetti-piece';
+    confetto.style.setProperty('--x', `${(Math.random() - 0.5) * 400}px`);
+    confetto.style.setProperty('--r', `${Math.random() * 720 - 360}deg`);
+    confetto.style.left = `${40 + Math.random() * 20}%`;
+    confetto.style.top = '40%';
+    confetto.style.background = colors[Math.floor(Math.random() * colors.length)];
+    confetto.style.animationDelay = `${Math.random() * 0.3}s`;
+    confetto.style.animationDuration = `${0.8 + Math.random() * 0.6}s`;
+    container.appendChild(confetto);
+    confetto.addEventListener('animationend', () => confetto.remove());
+  }
+
+  // Safety cleanup
+  setTimeout(() => {
+    container.querySelectorAll('.confetti-piece').forEach(el => el.remove());
+  }, 2500);
 }

@@ -33,9 +33,9 @@ export async function openChatPanel(paciente) {
 
   document.getElementById('chat-status-bar').innerHTML = `
     <span>Status:</span>
-    <span class="status-pill status-${paciente.status}">${paciente.status}</span>
+    <span class="status-pill status-${esc(paciente.status)}">${esc(paciente.status)}</span>
     <span style="flex:1"></span>
-    <span style="font-size:.75rem;color:var(--text-muted)">Paciente desde ${fmtData(paciente.created_at)}</span>`;
+    <span style="font-size:.75rem;color:var(--text-muted)">Paciente desde ${esc(fmtData(paciente.created_at))}</span>`;
 
   const msgContainer = document.getElementById('chat-messages');
   msgContainer.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text-muted);font-size:.8rem">Carregando…</div>';
@@ -83,12 +83,17 @@ export function renderChatMessages(msgs) {
   container.scrollTop = container.scrollHeight;
 }
 
+let chatSending = false;
 async function sendChatMessage() {
+  if (chatSending) return;
   const input    = document.getElementById('chat-input');
+  const sendBtn  = document.getElementById('chat-send');
   const msg      = input.value.trim();
   const paciente = State.currentChatPaciente;
   if (!msg || !paciente) return;
 
+  chatSending = true;
+  sendBtn.disabled = true;
   input.value = '';
   input.style.height = 'auto';
 
@@ -106,11 +111,13 @@ async function sendChatMessage() {
       if (ok) {
         toast('Mensagem enviada via WhatsApp ✓', 'success', 3000);
       }
-      // Se !ok, a mensagem já foi salva no CRM — sem alarmar o usuário
     });
 
   } catch (err) {
     toast(`Erro ao salvar: ${err.message}`, 'error');
     input.value = msg;
+  } finally {
+    chatSending = false;
+    sendBtn.disabled = false;
   }
 }

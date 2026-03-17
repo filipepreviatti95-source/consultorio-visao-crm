@@ -533,9 +533,9 @@ async function quickUpdateAgStatus(agId, novoStatus) {
     await updateAgendamentoField(agId, 'status', novoStatus);
     const ag = State.agendamentos.find(a => a.id === agId);
     if (ag) {
-      // Sync GCal
+      // Sync GCal — await garante que GCal reflete antes de seguir
       const acao = novoStatus === 'cancelado' ? 'cancelar' : 'atualizar';
-      sincronizarGcal({
+      await sincronizarGcal({
         acao,
         googleEventId: ag.google_event_id || null,
         nome: ag.nome_paciente,
