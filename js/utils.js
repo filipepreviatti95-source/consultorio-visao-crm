@@ -102,9 +102,18 @@ function removeToast(el) {
   setTimeout(() => el.remove(), 300);
 }
 
-// ── Notificação sonora ──
+// ── Som & Notificações ──
+
+/** Estado do som — persiste no localStorage */
+export function isSoundEnabled() {
+  return localStorage.getItem('soundEnabled') !== 'false'; // default: true
+}
+export function setSoundEnabled(val) {
+  localStorage.setItem('soundEnabled', val ? 'true' : 'false');
+}
 
 export function playNotificationSound() {
+  if (!isSoundEnabled()) return;
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = ctx.createOscillator();
@@ -119,4 +128,24 @@ export function playNotificationSound() {
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.4);
   } catch (e) { /* silencioso */ }
+}
+
+/** Browser push notification */
+export function sendBrowserNotification(title, body) {
+  if (!isSoundEnabled()) return; // respeita o toggle de som/notificações
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'granted') {
+    new Notification(title, { body, icon: '/favicon.ico', tag: 'crm-' + Date.now() });
+  } else if (Notification.permission !== 'denied') {
+    Notification.requestPermission().then(p => {
+      if (p === 'granted') new Notification(title, { body, icon: '/favicon.ico' });
+    });
+  }
+}
+
+/** Pede permissão para notificações (chamar no init) */
+export function requestNotificationPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
 }

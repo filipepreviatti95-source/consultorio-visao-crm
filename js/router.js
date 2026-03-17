@@ -3,6 +3,7 @@
  */
 
 import { State } from './config.js';
+import { isSoundEnabled, setSoundEnabled, requestNotificationPermission } from './utils.js';
 
 const PAGE_TITLES = {
   dashboard:    'Dashboard',
@@ -109,6 +110,27 @@ function applyTheme(dark) {
   const moon = document.getElementById('icon-moon');
   if (sun)  sun.style.display  = dark ? 'none' : '';
   if (moon) moon.style.display = dark ? ''     : 'none';
+}
+
+// ── Sound Toggle ──
+
+export function initSoundToggle() {
+  applySoundUI(isSoundEnabled());
+  document.getElementById('sound-toggle')?.addEventListener('click', () => {
+    const newVal = !isSoundEnabled();
+    setSoundEnabled(newVal);
+    applySoundUI(newVal);
+    if (newVal) requestNotificationPermission();
+  });
+  // Pede permissão de notificação no init se som está ativo
+  if (isSoundEnabled()) requestNotificationPermission();
+}
+
+function applySoundUI(enabled) {
+  const on  = document.getElementById('icon-sound-on');
+  const off = document.getElementById('icon-sound-off');
+  if (on)  on.style.display  = enabled ? '' : 'none';
+  if (off) off.style.display = enabled ? 'none' : '';
 }
 
 // Aplica tema imediatamente no load (antes do login) para evitar flash

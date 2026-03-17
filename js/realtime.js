@@ -3,8 +3,9 @@
  */
 
 import { db, State } from './config.js';
-import { toast, playNotificationSound } from './utils.js';
+import { toast, playNotificationSound, sendBrowserNotification } from './utils.js';
 import { renderChatMessages } from './chat.js';
+import { fetchConversasPaciente } from './api.js';
 
 let onDataChange = null; // callback injetado pelo app.js pra re-render
 
@@ -37,6 +38,8 @@ function handlePacienteChange(payload) {
   if (eventType === 'INSERT') {
     State.pacientes.unshift(novo);
     toast(`Novo paciente: ${novo.nome}`, 'info');
+    playNotificationSound();
+    sendBrowserNotification('Novo Lead!', `${novo.nome} — ${novo.telefone}`);
   } else if (eventType === 'UPDATE') {
     const idx = State.pacientes.findIndex(p => p.id === novo.id);
     if (idx >= 0) State.pacientes[idx] = novo;
@@ -71,9 +74,10 @@ function handleConversaInsert(payload) {
     playNotificationSound();
     const nome = State.pacientes.find(p => p.id === nova.paciente_id)?.nome || nova.telefone || 'Paciente';
     toast(`Nova mensagem de ${nome}`, 'info');
+    sendBrowserNotification('Nova Mensagem', `${nome}: ${(nova.mensagem || '').slice(0, 80)}`);
   }
 
-  // Atualiza chat aberto (por ID ou telefone)
+  // Atualiza chat aberto (por ID ou telefone) — re-fetch completo
   if (State.currentChatPaciente) {
     const p = State.currentChatPaciente;
     const nums = (p.telefone || '').replace(/\D/g, '');
@@ -81,7 +85,11 @@ function handleConversaInsert(payload) {
     const mesmoId  = nova.paciente_id === p.id;
     const mesmoTel = novaNums && nums && (novaNums.endsWith(nums) || nums.endsWith(novaNums));
     if (mesmoId || mesmoTel) {
-      renderChatMessages(State.conversas);
+      // Re-fetch conversas completas do paciente (não só a genérica)
+      fetchConversasPaciente(p.id, p.telefone).then(msgs => {
+        State.conversas = msgs;
+        renderChatMessages(msgs);
+      });
     }
   }
 

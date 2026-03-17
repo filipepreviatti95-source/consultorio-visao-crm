@@ -10,7 +10,7 @@ import { fetchConversasRecentes } from './api.js';
 import { initAuth, setOnAppInit, setupLogout } from './auth.js';
 
 // Router
-import { initNavigation, navigateTo, initSidebar, initDarkMode, setPageLoader } from './router.js';
+import { initNavigation, navigateTo, initSidebar, initDarkMode, initSoundToggle, setPageLoader } from './router.js';
 
 // UI
 import { initGlobalSearch, setOnSearchResultClick, initModal } from './ui.js';
@@ -34,6 +34,7 @@ setOnAppInit(async () => {
   initNavigation();
   initSidebar();
   initDarkMode();
+  initSoundToggle();
   initGlobalSearch();
   initModal();
   initChatPanel();

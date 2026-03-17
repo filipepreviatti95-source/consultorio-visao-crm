@@ -5,7 +5,7 @@
 
 import { State } from './config.js';
 import { esc, fmtHora, fmtData, tempoDesde, iniciais, waLink, STATUS_LABEL } from './utils.js';
-import { fetchPacientes, fetchAgendamentos, fetchConversasRecentes, fetchBotStats, syncGcalToSupabase } from './api.js';
+import { fetchPacientes, fetchAgendamentos, fetchConversasRecentes, fetchBotStats, syncGcalToSupabase, updateAgendamentoField, sincronizarGcal } from './api.js';
 import { openChatPanel } from './chat.js';
 
 // ── Estado do filtro de período ──
@@ -64,23 +64,203 @@ function getPeriodLabel() {
   }
 }
 
+// ── Calendar Picker State ──
+
+let calViewYear = new Date().getFullYear();
+let calViewMonth = new Date().getMonth();
+let calPickStart = null;   // Date or null
+let calPickEnd = null;     // Date or null
+let calStep = 'start';     // 'start' | 'end'
+
+function renderCalendar() {
+  const daysEl = document.getElementById('cal-days');
+  const labelEl = document.getElementById('cal-month-label');
+  const rangeLabelEl = document.getElementById('cal-range-label');
+  if (!daysEl || !labelEl) return;
+
+  const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  labelEl.textContent = `${meses[calViewMonth]} ${calViewYear}`;
+
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+  const firstDay = new Date(calViewYear, calViewMonth, 1);
+  const startDow = firstDay.getDay(); // 0=Dom
+  const daysInMonth = new Date(calViewYear, calViewMonth + 1, 0).getDate();
+
+  // Dias do mês anterior para preencher
+  const prevMonthDays = new Date(calViewYear, calViewMonth, 0).getDate();
+
+  let html = '';
+
+  // Dias do mês anterior (cinza)
+  for (let i = startDow - 1; i >= 0; i--) {
+    const d = prevMonthDays - i;
+    html += `<div class="cal-day cal-other" data-date="">${d}</div>`;
+  }
+
+  // Dias do mês atual
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${calViewYear}-${String(calViewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dateObj = new Date(calViewYear, calViewMonth, d);
+
+    let cls = 'cal-day';
+    if (dateStr === todayStr) cls += ' cal-today';
+
+    // Range highlighting
+    if (calPickStart && calPickEnd) {
+      const startT = calPickStart.getTime();
+      const endT = calPickEnd.getTime();
+      const curT = dateObj.getTime();
+      if (curT === startT && curT === endT) cls += ' cal-start cal-end';
+      else if (curT === startT) cls += ' cal-start';
+      else if (curT === endT) cls += ' cal-end';
+      else if (curT > startT && curT < endT) cls += ' cal-in-range';
+    } else if (calPickStart && !calPickEnd) {
+      if (dateObj.getTime() === calPickStart.getTime()) cls += ' cal-start cal-end';
+    }
+
+    html += `<div class="${cls}" data-date="${dateStr}">${d}</div>`;
+  }
+
+  // Próximo mês para completar grid (até 42 cells = 6 semanas)
+  const totalCells = startDow + daysInMonth;
+  const remaining = totalCells <= 35 ? 35 - totalCells : 42 - totalCells;
+  for (let d = 1; d <= remaining; d++) {
+    html += `<div class="cal-day cal-other" data-date="">${d}</div>`;
+  }
+
+  daysEl.innerHTML = html;
+
+  // Range label
+  if (rangeLabelEl) {
+    if (calPickStart && calPickEnd) {
+      rangeLabelEl.textContent = `${fmtDateShort(calPickStart)} → ${fmtDateShort(calPickEnd)}`;
+    } else if (calPickStart) {
+      rangeLabelEl.textContent = `${fmtDateShort(calPickStart)} → selecione o fim`;
+    } else {
+      rangeLabelEl.textContent = 'Selecione a data inicial';
+    }
+  }
+
+  // Click handler nos dias
+  daysEl.querySelectorAll('.cal-day:not(.cal-other)').forEach(dayEl => {
+    dayEl.addEventListener('click', () => {
+      const ds = dayEl.dataset.date;
+      if (!ds) return;
+      const parts = ds.split('-');
+      const clicked = new Date(+parts[0], +parts[1]-1, +parts[2]);
+
+      if (calStep === 'start') {
+        calPickStart = clicked;
+        calPickEnd = null;
+        calStep = 'end';
+        renderCalendar();
+      } else {
+        // step = 'end'
+        if (clicked < calPickStart) {
+          // Se clicou antes do start, inverte
+          calPickEnd = calPickStart;
+          calPickStart = clicked;
+        } else {
+          calPickEnd = clicked;
+        }
+        calStep = 'start';
+        renderCalendar();
+        // Auto-apply
+        applyCalendarRange();
+      }
+    });
+  });
+}
+
+function fmtDateShort(d) {
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+function applyCalendarRange() {
+  if (!calPickStart || !calPickEnd) return;
+  customStart = `${calPickStart.getFullYear()}-${String(calPickStart.getMonth()+1).padStart(2,'0')}-${String(calPickStart.getDate()).padStart(2,'0')}`;
+  customEnd = `${calPickEnd.getFullYear()}-${String(calPickEnd.getMonth()+1).padStart(2,'0')}-${String(calPickEnd.getDate()).padStart(2,'0')}`;
+  currentPeriod = 'custom';
+  const btns = document.querySelectorAll('.period-btn');
+  btns.forEach(b => b.classList.remove('active'));
+  document.querySelector('[data-period="custom"]')?.classList.add('active');
+  refreshDashboard();
+  // Fecha o calendário após aplicar
+  setTimeout(() => {
+    document.getElementById('period-calendar-wrap')?.classList.add('hidden');
+  }, 350);
+}
+
 // ── Init filtros ──
 
 export function initDashboardFilters() {
   const btns = document.querySelectorAll('.period-btn');
+  const calWrap = document.getElementById('period-calendar-wrap');
+
   btns.forEach(btn => {
     btn.addEventListener('click', () => {
       const period = btn.dataset.period;
       if (period === 'custom') {
-        document.getElementById('period-custom-range')?.classList.toggle('hidden');
+        calWrap?.classList.toggle('hidden');
+        if (!calWrap?.classList.contains('hidden')) {
+          // Reset to current month and render
+          const now = new Date();
+          calViewYear = now.getFullYear();
+          calViewMonth = now.getMonth();
+          renderCalendar();
+        }
         return;
       }
       currentPeriod = period;
-      document.getElementById('period-custom-range')?.classList.add('hidden');
+      calWrap?.classList.add('hidden');
       btns.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       refreshDashboard();
     });
+  });
+
+  // Calendar navigation
+  document.getElementById('cal-prev')?.addEventListener('click', () => {
+    calViewMonth--;
+    if (calViewMonth < 0) { calViewMonth = 11; calViewYear--; }
+    renderCalendar();
+  });
+  document.getElementById('cal-next')?.addEventListener('click', () => {
+    calViewMonth++;
+    if (calViewMonth > 11) { calViewMonth = 0; calViewYear++; }
+    renderCalendar();
+  });
+
+  // Clear selection
+  document.getElementById('cal-clear')?.addEventListener('click', () => {
+    calPickStart = null;
+    calPickEnd = null;
+    calStep = 'start';
+    renderCalendar();
+  });
+
+  // Close calendar on click outside
+  document.addEventListener('click', (e) => {
+    if (!calWrap || calWrap.classList.contains('hidden')) return;
+    const customBtn = document.querySelector('[data-period="custom"]');
+    if (calWrap.contains(e.target) || customBtn?.contains(e.target)) return;
+    calWrap.classList.add('hidden');
+  });
+
+  // Botão novo agendamento na agenda do dashboard
+  document.getElementById('btn-dash-novo-ag')?.addEventListener('click', async () => {
+    const { openModalAgendamento } = await import('./agendamentos.js');
+    openModalAgendamento(null);
+  });
+
+  // Botão limpar feed de conversas
+  document.getElementById('btn-limpar-feed')?.addEventListener('click', () => {
+    State.conversasRecentes = [];
+    renderDashboardFeed();
+    const { toast } = { toast: null }; // lazy import
+    import('./utils.js').then(m => m.toast('Feed de conversas limpo', 'info', 2000));
   });
 
   // Botão sincronizar Google Calendar
@@ -112,19 +292,6 @@ export function initDashboardFilters() {
       btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:-2px;margin-right:3px"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg> Sincronizar`;
     }
   });
-
-  document.getElementById('period-apply')?.addEventListener('click', () => {
-    const startInput = document.getElementById('period-date-start');
-    const endInput = document.getElementById('period-date-end');
-    if (startInput?.value && endInput?.value) {
-      customStart = startInput.value;
-      customEnd = endInput.value;
-      currentPeriod = 'custom';
-      btns.forEach(b => b.classList.remove('active'));
-      document.querySelector('[data-period="custom"]')?.classList.add('active');
-      refreshDashboard();
-    }
-  });
 }
 
 // ── Load ──
@@ -151,14 +318,14 @@ function refreshDashboard() {
 
 export function renderDashboardMetrics() {
   const { start, end } = getPeriodRange();
-  const startStr = start.toISOString().slice(0, 10);
-  const endStr = end.toISOString().slice(0, 10);
+  const startT = start.getTime();
+  const endT = end.getTime();
 
-  // 1. Consultas no período
+  // 1. Consultas no período (comparação por timestamp, timezone-safe)
   const agPeriodo = State.agendamentos.filter(a => {
     if (!a.data_hora || a.status === 'cancelado') return false;
-    const d = a.data_hora.slice(0, 10);
-    return d >= startStr && d < endStr;
+    const t = new Date(a.data_hora).getTime();
+    return t >= startT && t < endT;
   });
   setMetric('metric-hoje', agPeriodo.length);
   document.getElementById('metric-card-hoje')?.classList.toggle('metric-card-highlight', agPeriodo.length > 0);
@@ -182,7 +349,7 @@ export function renderDashboardMetrics() {
 
   // 3. Novos Contatos no período
   const novosNoPeriodo = State.pacientes.filter(p =>
-    p.status === 'novo_contato' && new Date(p.created_at) >= start && new Date(p.created_at) < end
+    p.status === 'novo_contato' && new Date(p.created_at).getTime() >= startT && new Date(p.created_at).getTime() < endT
   ).length;
   setMetric('metric-novos', novosNoPeriodo);
 
@@ -225,8 +392,8 @@ export function renderDashboardAgenda() {
   const container = document.getElementById('dash-agenda-timeline');
   if (!container) return;
   const { start, end } = getPeriodRange();
-  const startStr = start.toISOString().slice(0, 10);
-  const endStr = end.toISOString().slice(0, 10);
+  const startT = start.getTime();
+  const endT = end.getTime();
   const now = new Date();
 
   // Título dinâmico
@@ -240,8 +407,8 @@ export function renderDashboardAgenda() {
   const lista = State.agendamentos
     .filter(a => {
       if (!a.data_hora || a.status === 'cancelado') return false;
-      const d = a.data_hora.slice(0, 10);
-      return d >= startStr && d < endStr;
+      const t = new Date(a.data_hora).getTime();
+      return t >= startT && t < endT;
     })
     .sort((a, b) => new Date(a.data_hora) - new Date(b.data_hora));
 
@@ -295,16 +462,86 @@ export function renderDashboardAgenda() {
         <div class="timeline-status">
           <span class="status-pill status-${ag.status}">${STATUS_LABEL[ag.status] || ag.status}</span>
         </div>
+        <div class="timeline-actions">
+          ${ag.status !== 'concluido' ? `<button class="tl-action-btn tl-action-done" data-ag-id="${ag.id}" title="Marcar como concluído">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg>
+          </button>` : ''}
+          ${ag.status !== 'cancelado' ? `<button class="tl-action-btn tl-action-cancel" data-ag-id="${ag.id}" title="Cancelar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>` : ''}
+          <button class="tl-action-btn tl-action-edit" data-ag-id="${ag.id}" title="Editar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 1 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+        </div>
       </div>`;
   }).join('');
 
-  // Click abre chat
+  // Click no item abre chat (exceto botões de ação)
   container.querySelectorAll('.timeline-item').forEach(item => {
-    item.addEventListener('click', () => {
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('.tl-action-btn') || e.target.closest('.timeline-wa')) return;
       const paciente = State.pacientes.find(p => p.id === item.dataset.pacienteId);
       if (paciente) openChatPanel(paciente);
     });
   });
+
+  // Ações rápidas: concluir
+  container.querySelectorAll('.tl-action-done').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      quickUpdateAgStatus(btn.dataset.agId, 'concluido');
+    });
+  });
+
+  // Ações rápidas: cancelar
+  container.querySelectorAll('.tl-action-cancel').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (confirm('Cancelar este agendamento?')) {
+        quickUpdateAgStatus(btn.dataset.agId, 'cancelado');
+      }
+    });
+  });
+
+  // Ações rápidas: editar (abre modal de agendamentos)
+  container.querySelectorAll('.tl-action-edit').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const ag = State.agendamentos.find(a => a.id === btn.dataset.agId);
+      if (ag) {
+        const { openModalAgendamento } = await import('./agendamentos.js');
+        openModalAgendamento(ag);
+      }
+    });
+  });
+}
+
+/** Atualiza status do agendamento via quick-action + sync GCal */
+async function quickUpdateAgStatus(agId, novoStatus) {
+  try {
+    await updateAgendamentoField(agId, 'status', novoStatus);
+    const ag = State.agendamentos.find(a => a.id === agId);
+    if (ag) {
+      // Sync GCal
+      const acao = novoStatus === 'cancelado' ? 'cancelar' : 'atualizar';
+      sincronizarGcal({
+        acao,
+        googleEventId: ag.google_event_id || null,
+        nome: ag.nome_paciente,
+        telefone: ag.telefone,
+        dataHora: ag.data_hora,
+        obs: ag.observacoes || '',
+        status: novoStatus,
+      });
+    }
+    renderDashboardAgenda();
+    renderDashboardMetrics();
+    const { toast } = await import('./utils.js');
+    toast(novoStatus === 'concluido' ? 'Consulta concluída ✓' : 'Agendamento cancelado', 'success', 2000);
+  } catch (err) {
+    const { toast } = await import('./utils.js');
+    toast(`Erro: ${err.message}`, 'error');
+  }
 }
 
 // ── Feed de Conversas (agrupado por contato) ──

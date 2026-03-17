@@ -204,8 +204,16 @@ export async function sendWhatsApp(telefone, mensagem) {
       const err = await res.text();
       throw new Error(`WhatsApp API error: ${res.status} — ${err}`);
     }
-    const json = await res.json();
-    return json.ok !== false; // true se enviou
+    // Webhook pode retornar JSON ou texto — trata ambos
+    const text = await res.text();
+    try {
+      const json = JSON.parse(text);
+      if (json.ok === false) throw new Error(json.erro || 'Erro desconhecido');
+      return true;
+    } catch {
+      // Se não é JSON válido mas HTTP foi 200, consideramos sucesso
+      return true;
+    }
   } catch (err) {
     console.error('sendWhatsApp error:', err);
     throw err;
