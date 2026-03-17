@@ -22,7 +22,7 @@ import { initChatPanel, openChatPanel } from './chat.js';
 import { initRealtime, setOnDataChange } from './realtime.js';
 
 // Páginas
-import { loadDashboard, renderDashboardMetrics, renderDashboardAgenda, renderDashboardAgendamentos, renderDashboardFeed } from './dashboard.js';
+import { loadDashboard, renderDashboardMetrics, renderDashboardAgenda, renderDashboardAgendamentos, renderDashboardFeed, initDashboardFilters } from './dashboard.js';
 import { loadKanban, renderKanban, setOpenModalPaciente } from './kanban.js';
 import { loadPacientes, renderPacientesTable, openModalPaciente, setupNovoPacienteBtns } from './pacientes.js';
 import { loadAgendamentos, renderAgendamentos, filtrarAgendamentosPorData, exportarAgendamentosCSV } from './agendamentos.js';
@@ -37,6 +37,7 @@ setOnAppInit(async () => {
   initGlobalSearch();
   initModal();
   initChatPanel();
+  initDashboardFilters();
   setupLogout();
   setupNovoPacienteBtns();
 

@@ -105,6 +105,15 @@ export function initDarkMode() {
 
 function applyTheme(dark) {
   document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-  document.getElementById('icon-sun').style.display  = dark ? 'none' : '';
-  document.getElementById('icon-moon').style.display = dark ? ''     : 'none';
+  const sun  = document.getElementById('icon-sun');
+  const moon = document.getElementById('icon-moon');
+  if (sun)  sun.style.display  = dark ? 'none' : '';
+  if (moon) moon.style.display = dark ? ''     : 'none';
+}
+
+// Aplica tema imediatamente no load (antes do login) para evitar flash
+applyThemeEarly();
+function applyThemeEarly() {
+  const dark = localStorage.getItem('darkMode') === 'true';
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
 }

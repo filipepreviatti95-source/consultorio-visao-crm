@@ -153,30 +153,38 @@ export async function insertConversa(pacienteId, telefone, mensagem) {
 
 // ── Bot Stats ──
 
-export async function fetchBotStats() {
-  const hoje = new Date();
-  const hojeStr = hoje.toISOString().slice(0, 10);
+export async function fetchBotStats(range) {
+  // Aceita { start: Date, end: Date } — fallback para hoje se não vier
+  let startStr, endStr;
+  if (range && range.start && range.end) {
+    startStr = range.start.toISOString();
+    endStr = range.end.toISOString();
+  } else {
+    const hoje = new Date();
+    startStr = hoje.toISOString().slice(0, 10) + 'T00:00:00';
+    endStr = hoje.toISOString().slice(0, 10) + 'T23:59:59.999';
+  }
 
-  // Conta mensagens do assistente (bot) de hoje
-  const { count: botHoje, error: e1 } = await db
+  // Conta mensagens do assistente (bot) no período
+  const { count: botCount, error: e1 } = await db
     .from('conversas')
     .select('*', { count: 'exact', head: true })
     .eq('remetente', 'assistente')
-    .gte('created_at', hojeStr + 'T00:00:00')
-    .lt('created_at', hojeStr + 'T23:59:59.999');
+    .gte('created_at', startStr)
+    .lt('created_at', endStr);
 
-  // Conta pacientes únicos que o bot atendeu hoje
+  // Conta pacientes únicos que o bot atendeu no período
   const { data: botPacientes, error: e2 } = await db
     .from('conversas')
     .select('telefone')
     .eq('remetente', 'assistente')
-    .gte('created_at', hojeStr + 'T00:00:00')
-    .lt('created_at', hojeStr + 'T23:59:59.999');
+    .gte('created_at', startStr)
+    .lt('created_at', endStr);
 
   const pacientesUnicos = new Set((botPacientes || []).map(c => c.telefone)).size;
 
   return {
-    mensagensHoje: botHoje || 0,
+    mensagensHoje: botCount || 0,
     pacientesAtendidos: pacientesUnicos,
   };
 }

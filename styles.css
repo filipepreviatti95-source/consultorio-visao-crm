@@ -589,6 +589,56 @@ input, select, textarea { font-family: inherit; }
    DASHBOARD
 ══════════════════════════════════════════════════════ */
 
+/* Filtros de período */
+.dash-period-bar {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+.period-btn {
+  padding: .4rem .85rem;
+  border-radius: var(--radius-sm);
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all var(--trans-fast);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+}
+.period-btn:hover { background: var(--color-primary-light); color: var(--color-primary); border-color: var(--color-primary); }
+.period-btn.active {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+.period-custom-range {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-left: .25rem;
+}
+.period-custom-range.hidden { display: none; }
+.period-custom-range input[type="date"] {
+  padding: .35rem .5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: .8rem;
+  font-family: inherit;
+}
+.period-custom-range span {
+  font-size: .78rem;
+  color: var(--text-muted);
+}
+
 /* Métricas */
 .metrics-grid {
   display: grid;
@@ -623,6 +673,17 @@ input, select, textarea { font-family: inherit; }
   flex-shrink: 0;
 }
 .metric-icon svg { width: 22px; height: 22px; }
+
+/* Variantes de cor dos ícones (adaptáveis ao tema) */
+.metric-icon-warning { background: #FFF8E1; color: #F59E0B; }
+.metric-icon-success { background: #E8F8F1; color: #00A86B; }
+.metric-icon-purple  { background: #F3F0FF; color: #7C3AED; }
+.metric-icon-primary { background: var(--color-primary-light); color: var(--color-primary); }
+
+[data-theme="dark"] .metric-icon-warning { background: rgba(245,158,11,.15); }
+[data-theme="dark"] .metric-icon-success { background: rgba(0,168,107,.15); }
+[data-theme="dark"] .metric-icon-purple  { background: rgba(124,58,237,.15); }
+[data-theme="dark"] .metric-icon-primary { background: rgba(0,102,204,.15); }
 
 .metric-info { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
 .metric-label { font-size: .78rem; color: var(--text-secondary); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -718,6 +779,15 @@ input, select, textarea { font-family: inherit; }
 .timeline-done .timeline-time {
   background: var(--color-secondary-light);
   color: var(--color-secondary);
+}
+
+.timeline-date-tag {
+  display: block;
+  font-size: .65rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 2px;
+  letter-spacing: .02em;
 }
 
 .timeline-dot {
@@ -1158,6 +1228,12 @@ input, select, textarea { font-family: inherit; }
 .status-confirmado     { background: #E8F8F1; color: #00A86B; }
 .status-concluido      { background: #F3F4F6; color: #4B5563; }
 .status-cancelado      { background: #FEF2F2; color: #DC2626; }
+
+[data-theme="dark"] .status-novo_contato   { background: rgba(245,158,11,.18); color: #FBBF24; }
+[data-theme="dark"] .status-agendado       { background: rgba(0,102,204,.18); color: #60A5FA; }
+[data-theme="dark"] .status-confirmado     { background: rgba(0,168,107,.18); color: #34D399; }
+[data-theme="dark"] .status-concluido      { background: rgba(107,114,128,.18); color: #9CA3AF; }
+[data-theme="dark"] .status-cancelado      { background: rgba(239,68,68,.18); color: #F87171; }
 
 .empty-state {
   display: flex;

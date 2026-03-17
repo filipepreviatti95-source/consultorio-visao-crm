@@ -1,14 +1,101 @@
 /**
  * dashboard.js — Dashboard redesenhado para secretária
- * Métricas: Consultas Hoje, Bot Hoje, Conversão, Novos 7d
- * Agenda do dia estilo timeline
- * Conversas agrupadas por contato (1 linha por número)
+ * Métricas com filtro de período, agenda timeline, conversas agrupadas
  */
 
 import { State } from './config.js';
 import { esc, fmtHora, fmtData, tempoDesde, iniciais, waLink, STATUS_LABEL } from './utils.js';
 import { fetchPacientes, fetchAgendamentos, fetchConversasRecentes, fetchBotStats } from './api.js';
 import { openChatPanel } from './chat.js';
+
+// ── Estado do filtro de período ──
+
+let currentPeriod = 'hoje';
+let customStart = null;
+let customEnd = null;
+
+/** Retorna { start: Date, end: Date } baseado no período selecionado */
+function getPeriodRange() {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayEnd = new Date(todayStart);
+  todayEnd.setDate(todayEnd.getDate() + 1);
+
+  switch (currentPeriod) {
+    case 'hoje':
+      return { start: todayStart, end: todayEnd };
+    case 'ontem': {
+      const yStart = new Date(todayStart);
+      yStart.setDate(yStart.getDate() - 1);
+      return { start: yStart, end: todayStart };
+    }
+    case '7d': {
+      const wStart = new Date(todayStart);
+      wStart.setDate(wStart.getDate() - 7);
+      return { start: wStart, end: todayEnd };
+    }
+    case 'mes': {
+      const mStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { start: mStart, end: todayEnd };
+    }
+    case 'custom':
+      if (customStart && customEnd) {
+        const cEnd = new Date(customEnd);
+        cEnd.setDate(cEnd.getDate() + 1); // inclui o dia final
+        return { start: new Date(customStart), end: cEnd };
+      }
+      return { start: todayStart, end: todayEnd };
+    default:
+      return { start: todayStart, end: todayEnd };
+  }
+}
+
+/** Formata label do período para o header da agenda */
+function getPeriodLabel() {
+  const { start, end } = getPeriodRange();
+  const dias = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+  switch (currentPeriod) {
+    case 'hoje': return `${dias[start.getDay()]}, ${fmtData(start.toISOString())}`;
+    case 'ontem': return `Ontem, ${fmtData(start.toISOString())}`;
+    case '7d': return `Últimos 7 dias`;
+    case 'mes': return `Mês atual`;
+    case 'custom': return `${fmtData(start.toISOString())} — ${fmtData(new Date(end.getTime() - 86400000).toISOString())}`;
+    default: return '';
+  }
+}
+
+// ── Init filtros ──
+
+export function initDashboardFilters() {
+  const btns = document.querySelectorAll('.period-btn');
+  btns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const period = btn.dataset.period;
+      if (period === 'custom') {
+        document.getElementById('period-custom-range')?.classList.toggle('hidden');
+        return;
+      }
+      currentPeriod = period;
+      document.getElementById('period-custom-range')?.classList.add('hidden');
+      btns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      refreshDashboard();
+    });
+  });
+
+  document.getElementById('period-apply')?.addEventListener('click', () => {
+    const startInput = document.getElementById('period-date-start');
+    const endInput = document.getElementById('period-date-end');
+    if (startInput?.value && endInput?.value) {
+      customStart = startInput.value;
+      customEnd = endInput.value;
+      currentPeriod = 'custom';
+      btns.forEach(b => b.classList.remove('active'));
+      document.querySelector('[data-period="custom"]')?.classList.add('active');
+      refreshDashboard();
+    }
+  });
+}
 
 // ── Load ──
 
@@ -19,23 +106,41 @@ export async function loadDashboard() {
   renderDashboardFeed();
 
   // Bot stats async (não bloqueia render)
-  fetchBotStats().then(stats => renderBotMetric(stats)).catch(() => {});
+  fetchBotStats(getPeriodRange()).then(stats => renderBotMetric(stats)).catch(() => {});
+}
+
+/** Re-render tudo com novo período (sem re-fetch, dados já em memória) */
+function refreshDashboard() {
+  renderDashboardMetrics();
+  renderDashboardAgenda();
+  // Bot stats precisa re-fetch (query por data)
+  fetchBotStats(getPeriodRange()).then(stats => renderBotMetric(stats)).catch(() => {});
 }
 
 // ── Métricas ──
 
 export function renderDashboardMetrics() {
-  const hoje    = new Date();
-  const hojeStr = hoje.toISOString().slice(0, 10);
+  const { start, end } = getPeriodRange();
+  const startStr = start.toISOString().slice(0, 10);
+  const endStr = end.toISOString().slice(0, 10);
 
-  // 1. Consultas Hoje
-  const agHoje = State.agendamentos.filter(a =>
-    a.data_hora && a.data_hora.slice(0, 10) === hojeStr && a.status !== 'cancelado'
-  );
-  setMetric('metric-hoje', agHoje.length);
-  document.getElementById('metric-card-hoje')?.classList.toggle('metric-card-highlight', agHoje.length > 0);
+  // 1. Consultas no período
+  const agPeriodo = State.agendamentos.filter(a => {
+    if (!a.data_hora || a.status === 'cancelado') return false;
+    const d = a.data_hora.slice(0, 10);
+    return d >= startStr && d < endStr;
+  });
+  setMetric('metric-hoje', agPeriodo.length);
+  document.getElementById('metric-card-hoje')?.classList.toggle('metric-card-highlight', agPeriodo.length > 0);
 
-  // 2. Taxa de Conversão (contatos que viraram agendamento)
+  // Label dinâmico do card
+  const labelEl = document.querySelector('#metric-card-hoje .metric-label');
+  if (labelEl) {
+    const labels = { hoje: 'Consultas Hoje', ontem: 'Consultas Ontem', '7d': 'Consultas (7d)', mes: 'Consultas (Mês)', custom: 'Consultas' };
+    labelEl.textContent = labels[currentPeriod] || 'Consultas';
+  }
+
+  // 2. Taxa de Conversão (global, não depende do período)
   const totalContatos = State.pacientes.length;
   const convertidos = State.pacientes.filter(p =>
     p.status !== 'novo_contato' && p.status !== 'cancelado'
@@ -45,14 +150,20 @@ export function renderDashboardMetrics() {
   const subConv = document.getElementById('metric-conversao-sub');
   if (subConv) subConv.textContent = `${convertidos} de ${totalContatos} contatos`;
 
-  // 3. Novos Contatos (7d)
-  const seteDiasAtras = new Date(hoje);
-  seteDiasAtras.setDate(hoje.getDate() - 7);
-  setMetric('metric-novos', State.pacientes.filter(p =>
-    p.status === 'novo_contato' && new Date(p.created_at) >= seteDiasAtras
-  ).length);
+  // 3. Novos Contatos no período
+  const novosNoPeriodo = State.pacientes.filter(p =>
+    p.status === 'novo_contato' && new Date(p.created_at) >= start && new Date(p.created_at) < end
+  ).length;
+  setMetric('metric-novos', novosNoPeriodo);
 
-  // Badge sidebar
+  // Label dinâmico novos
+  const novosLabel = document.querySelector('#metric-novos')?.closest('.metric-card')?.querySelector('.metric-label');
+  if (novosLabel) {
+    const labels = { hoje: 'Novos Hoje', ontem: 'Novos Ontem', '7d': 'Novos (7d)', mes: 'Novos (Mês)', custom: 'Novos Contatos' };
+    novosLabel.textContent = labels[currentPeriod] || 'Novos Contatos';
+  }
+
+  // Badge sidebar (sempre total global)
   const novosCount = State.pacientes.filter(p => p.status === 'novo_contato').length;
   const badgeEl = document.getElementById('badge-novos');
   if (badgeEl) {
@@ -60,12 +171,9 @@ export function renderDashboardMetrics() {
     badgeEl.style.display = novosCount > 0 ? '' : 'none';
   }
 
-  // Data de hoje no header da agenda
+  // Data label no header da agenda
   const dateLabel = document.getElementById('dash-date-label');
-  if (dateLabel) {
-    const dias = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-    dateLabel.textContent = `${dias[hoje.getDay()]}, ${fmtData(hoje.toISOString())}`;
-  }
+  if (dateLabel) dateLabel.textContent = getPeriodLabel();
 }
 
 function renderBotMetric(stats) {
@@ -81,16 +189,30 @@ function setMetric(id, value) {
   el.classList.remove('skeleton');
 }
 
-// ── Agenda do Dia (Timeline) ──
+// ── Agenda (Timeline) ──
 
 export function renderDashboardAgenda() {
   const container = document.getElementById('dash-agenda-timeline');
   if (!container) return;
-  const hoje    = new Date();
-  const hojeStr = hoje.toISOString().slice(0, 10);
+  const { start, end } = getPeriodRange();
+  const startStr = start.toISOString().slice(0, 10);
+  const endStr = end.toISOString().slice(0, 10);
+  const now = new Date();
+
+  // Título dinâmico
+  const titleEl = document.querySelector('.dash-agenda-card .card-title');
+  if (titleEl) {
+    const svgIcon = titleEl.querySelector('svg')?.outerHTML || '';
+    const titles = { hoje: 'Agenda de Hoje', ontem: 'Agenda de Ontem', '7d': 'Agenda (7 dias)', mes: 'Agenda do Mês', custom: 'Agenda' };
+    titleEl.innerHTML = svgIcon + (titles[currentPeriod] || 'Agenda');
+  }
 
   const lista = State.agendamentos
-    .filter(a => a.data_hora && a.data_hora.slice(0, 10) === hojeStr && a.status !== 'cancelado')
+    .filter(a => {
+      if (!a.data_hora || a.status === 'cancelado') return false;
+      const d = a.data_hora.slice(0, 10);
+      return d >= startStr && d < endStr;
+    })
     .sort((a, b) => new Date(a.data_hora) - new Date(b.data_hora));
 
   if (lista.length === 0) {
@@ -100,7 +222,7 @@ export function renderDashboardAgenda() {
           <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
           <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>
         </svg>
-        <p>Nenhuma consulta agendada para hoje</p>
+        <p>Nenhuma consulta agendada${currentPeriod === 'hoje' ? ' para hoje' : ''}</p>
         <a href="#agendamentos" class="btn btn-outline btn-sm" style="margin-top:8px">Agendar consulta</a>
       </div>`;
     return;
@@ -108,24 +230,27 @@ export function renderDashboardAgenda() {
 
   container.innerHTML = lista.map(ag => {
     const hora = new Date(ag.data_hora);
-    const passou = hora < hoje;
+    const passou = hora < now;
     const isConcluido = ag.status === 'concluido';
 
-    // Status visual
     let statusClass = 'timeline-pending';
-    let statusIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="#0066CC" stroke-width="2.5" width="14" height="14"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+    let statusIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2.5" width="14" height="14"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
 
     if (isConcluido) {
       statusClass = 'timeline-done';
-      statusIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="#00A86B" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>`;
+      statusIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="var(--color-secondary)" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>`;
     } else if (passou) {
       statusClass = 'timeline-late';
       statusIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.5" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
     }
 
+    // Mostra data se período > 1 dia
+    const showDate = currentPeriod !== 'hoje' && currentPeriod !== 'ontem';
+    const datePrefix = showDate ? `<span class="timeline-date-tag">${fmtData(ag.data_hora)}</span>` : '';
+
     return `
       <div class="timeline-item ${statusClass}" data-paciente-id="${ag.paciente_id || ''}" data-ag-id="${ag.id}">
-        <div class="timeline-time">${fmtHora(ag.data_hora)}</div>
+        <div class="timeline-time">${fmtHora(ag.data_hora)}${datePrefix}</div>
         <div class="timeline-dot">${statusIcon}</div>
         <div class="timeline-content">
           <div class="timeline-name">${esc(ag.nome_paciente)}</div>
@@ -158,7 +283,6 @@ export function renderDashboardFeed() {
   const container = document.getElementById('feed-list');
   if (!container) return;
 
-  // conversasRecentes já vem agrupada (1 por paciente), mas vamos garantir
   const feed = (State.conversasRecentes || []).slice(0, 15);
 
   if (feed.length === 0) {
@@ -176,7 +300,6 @@ export function renderDashboardFeed() {
     const nome = conv.pacientes?.nome || conv.telefone || '—';
     const telefone = conv.pacientes?.telefone || conv.telefone || '';
 
-    // Conta msgs não lidas? Simplificado: mostra última msg
     return `
       <div class="conv-item" data-paciente-id="${conv.paciente_id || ''}" data-telefone="${esc(telefone)}">
         <div class="conv-avatar">${iniciais(nome)}</div>
@@ -195,14 +318,12 @@ export function renderDashboardFeed() {
       </div>`;
   }).join('');
 
-  // Click abre chat panel
   container.querySelectorAll('.conv-item').forEach(item => {
     item.addEventListener('click', () => {
       const paciente = State.pacientes.find(p => p.id === item.dataset.pacienteId);
       if (paciente) {
         openChatPanel(paciente);
       } else {
-        // Se não encontrar por ID, tenta pelo telefone
         const tel = item.dataset.telefone;
         const pacByTel = State.pacientes.find(p => p.telefone && p.telefone.includes(tel.replace(/\D/g, '').slice(-8)));
         if (pacByTel) openChatPanel(pacByTel);
