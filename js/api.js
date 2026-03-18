@@ -161,6 +161,35 @@ export async function fetchConversasPaciente(pacienteId, telefone) {
   return unicas;
 }
 
+export async function deleteConversasPaciente(pacienteId, telefone) {
+  // Deleta por paciente_id
+  if (pacienteId) {
+    const { error: e1 } = await db.from('conversas').delete().eq('paciente_id', pacienteId);
+    if (e1) throw e1;
+  }
+
+  // Deleta por telefone (conversas do bot sem paciente_id)
+  if (telefone) {
+    const nums = (telefone || '').replace(/\D/g, '');
+    const telefoneSemDDI = nums.startsWith('55') && nums.length >= 12 ? nums.slice(2) : nums;
+    const telefoneComDDI = nums.startsWith('55') ? nums : '55' + nums;
+
+    const { error: e2 } = await db
+      .from('conversas')
+      .delete()
+      .or(`telefone.eq.${nums},telefone.eq.${telefoneSemDDI},telefone.eq.${telefoneComDDI}`)
+      .is('paciente_id', null);
+    if (e2) throw e2;
+
+    // Limpa fila de debounce do bot (message_queue)
+    try {
+      await db.from('message_queue')
+        .delete()
+        .or(`telefone.eq.${nums},telefone.eq.${telefoneSemDDI},telefone.eq.${telefoneComDDI}`);
+    } catch { /* tabela pode não existir, ignora */ }
+  }
+}
+
 export async function insertConversa(pacienteId, telefone, mensagem) {
   const { error } = await db.from('conversas').insert({
     paciente_id: pacienteId,

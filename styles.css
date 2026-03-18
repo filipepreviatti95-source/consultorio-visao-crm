@@ -1669,6 +1669,10 @@ input, select, textarea { font-family: inherit; }
 .chat-wa-btn-link { color: #4ADE80; border-color: rgba(74,222,128,.25); }
 .chat-wa-btn-link:hover { background: rgba(74,222,128,.2); color: #4ADE80; }
 
+.chat-delete-btn { color: #F87171; border-color: rgba(248,113,113,.25); padding: .4rem; }
+.chat-delete-btn:hover { background: rgba(248,113,113,.2); color: #F87171; }
+.chat-delete-btn:disabled { opacity: .5; cursor: not-allowed; }
+
 .chat-close-btn {
   padding: .4rem;
   border-radius: var(--radius-sm);

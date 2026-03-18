@@ -4,7 +4,7 @@
 
 import { State } from './config.js';
 import { iniciais, waLink, esc, fmtData, tempoDesde, toast } from './utils.js';
-import { fetchConversasPaciente, insertConversa, sendWhatsApp } from './api.js';
+import { fetchConversasPaciente, insertConversa, sendWhatsApp, deleteConversasPaciente } from './api.js';
 
 let chatInitDone = false;
 
@@ -19,6 +19,10 @@ export function initChatPanel() {
 
   closeEl.addEventListener('click', closeChatPanel);
   overlayEl.addEventListener('click', closeChatPanel);
+
+  // Botão Limpar Histórico
+  const deleteBtn = document.getElementById('chat-delete-history');
+  if (deleteBtn) deleteBtn.addEventListener('click', handleDeleteHistory);
 
   // Clique fora do modal (no padding do chat-panel) também fecha
   const panelEl = document.getElementById('chat-panel');
@@ -103,6 +107,29 @@ export function renderChatMessages(msgs) {
   }).join('');
 
   container.scrollTop = container.scrollHeight;
+}
+
+async function handleDeleteHistory() {
+  const paciente = State.currentChatPaciente;
+  if (!paciente) return;
+
+  const confirmou = confirm(`Tem certeza que deseja apagar todo o histórico de conversa com ${paciente.nome}?\n\nIsso vai apagar todas as mensagens (paciente, bot e equipe). Essa ação não pode ser desfeita.`);
+  if (!confirmou) return;
+
+  const btn = document.getElementById('chat-delete-history');
+  if (btn) btn.disabled = true;
+
+  try {
+    await deleteConversasPaciente(paciente.id, paciente.telefone);
+    State.conversas = [];
+    renderChatMessages([]);
+    toast('Histórico apagado com sucesso', 'success', 3000);
+  } catch (err) {
+    console.error('[Chat] Erro ao deletar histórico:', err);
+    toast(`Erro ao apagar: ${err.message}`, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 let chatSending = false;
