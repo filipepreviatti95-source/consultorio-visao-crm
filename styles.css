@@ -2227,6 +2227,88 @@ input, select, textarea { font-family: inherit; }
 .treinamento-toggle-off { opacity: .4; }
 .treinamento-toggle-off:hover { opacity: .8; }
 
+/* Card sem tags - aviso visual */
+.treinamento-card-sem-tags {
+  border-left: 3px solid #f59e0b;
+}
+.treinamento-tags-aviso {
+  margin-top: .5rem;
+  font-size: .75rem;
+  color: #f59e0b;
+  font-weight: 500;
+  padding: .35rem .6rem;
+  background: rgba(245,158,11,.08);
+  border-radius: 6px;
+}
+
+/* Sugestões de tags */
+.tags-sugestoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  margin-top: .4rem;
+  align-items: center;
+}
+.sugestoes-label {
+  font-size: .72rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.tag-sugestao {
+  font-size: .72rem;
+  padding: .2rem .55rem;
+  border-radius: 99px;
+  border: 1px dashed var(--primary);
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  font-weight: 500;
+  transition: all .15s ease;
+}
+.tag-sugestao:hover {
+  background: var(--primary);
+  color: #fff;
+  border-style: solid;
+}
+
+/* Validação inline */
+.form-field-error {
+  font-size: .75rem;
+  color: #ef4444;
+  font-weight: 500;
+  margin-top: .3rem;
+}
+.form-hint {
+  display: block;
+  font-size: .75rem;
+  color: var(--text-muted);
+  margin-bottom: .3rem;
+}
+.label-obrigatorio {
+  font-size: .7rem;
+  color: #ef4444;
+  font-weight: 400;
+  margin-left: .3rem;
+}
+
+/* Caixa de dica */
+.treinamento-dica-box {
+  margin-top: .75rem;
+  padding: .75rem 1rem;
+  background: rgba(0,102,204,.05);
+  border-radius: 8px;
+  border-left: 3px solid var(--primary);
+  font-size: .8rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.treinamento-dica-box strong {
+  color: var(--primary);
+}
+[data-theme="dark"] .treinamento-dica-box {
+  background: rgba(0,102,204,.1);
+}
+
 .treinamento-empty {
   display: flex;
   flex-direction: column;

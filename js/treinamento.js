@@ -1,6 +1,7 @@
 /**
  * treinamento.js — Tela de Treinamento do Bot (Base de Conhecimento)
  * CRUD completo para as meninas do atendimento cadastrarem perguntas e respostas.
+ * v2 — Auto-tags, validação obrigatória, UX para não-técnicos
  */
 
 import { State } from './config.js';
@@ -20,8 +21,31 @@ const CATEGORIAS = [
   { valor: 'geral', label: 'Geral', emoji: '💬' },
 ];
 
+// Stopwords que não servem como tag
+const STOPWORDS = new Set([
+  'que', 'com', 'para', 'por', 'uma', 'uns', 'das', 'dos', 'nas', 'nos',
+  'mas', 'pra', 'pro', 'tem', 'vai', 'vou', 'isso', 'essa', 'esse', 'esta',
+  'como', 'mais', 'muito', 'aqui', 'ali', 'ser', 'ter', 'bem', 'sim', 'nao',
+  'ele', 'ela', 'seu', 'sua', 'meu', 'minha', 'qual', 'quem', 'onde', 'quando',
+  'voce', 'voces', 'gente', 'sobre', 'pode', 'quero', 'preciso', 'tambem',
+  'ainda', 'fica', 'faz', 'tipo', 'acho', 'bom', 'dia', 'boa', 'tarde', 'noite',
+]);
+
 function catLabel(val) {
   return CATEGORIAS.find(c => c.valor === val) || { label: val, emoji: '📌' };
+}
+
+/**
+ * Gera sugestões de palavras-chave a partir da pergunta e resposta.
+ * Extrai palavras relevantes (>3 chars, sem stopwords).
+ */
+function gerarSugestoesTags(pergunta, resposta) {
+  const texto = `${pergunta} ${resposta}`.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ');
+  const palavras = texto.split(/\s+/).filter(p => p.length > 3 && !STOPWORDS.has(p));
+  // Deduplica e pega top 8
+  return [...new Set(palavras)].slice(0, 8);
 }
 
 // ── Load ──
@@ -89,8 +113,9 @@ function renderTreinamento() {
 
     for (const item of items) {
       const inativo = !item.ativo;
+      const semTags = !item.palavras_chave || item.palavras_chave.length === 0;
       html += `
-      <div class="treinamento-card ${inativo ? 'treinamento-card-inativo' : ''}" data-id="${item.id}">
+      <div class="treinamento-card ${inativo ? 'treinamento-card-inativo' : ''} ${semTags ? 'treinamento-card-sem-tags' : ''}" data-id="${item.id}">
         <div class="treinamento-card-header">
           <div class="treinamento-pergunta">${escapeHtml(item.pergunta)}</div>
           <div class="treinamento-card-actions">
@@ -109,8 +134,10 @@ function renderTreinamento() {
           </div>
         </div>
         <div class="treinamento-resposta">${escapeHtml(item.resposta)}</div>
-        ${(item.palavras_chave && item.palavras_chave.length > 0) ?
-          `<div class="treinamento-tags">${item.palavras_chave.map(t => `<span class="treinamento-tag">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+        ${semTags
+          ? `<div class="treinamento-tags-aviso">⚠️ Sem palavras-chave — o bot pode não encontrar esta resposta</div>`
+          : `<div class="treinamento-tags">${item.palavras_chave.map(t => `<span class="treinamento-tag">${escapeHtml(t)}</span>`).join('')}</div>`
+        }
       </div>`;
     }
     html += `</div>`;
@@ -174,17 +201,25 @@ function abrirModalTreinamento(item = null) {
       <select id="trein-categoria">${categoriaOptions}</select>
     </div>
     <div class="form-group">
-      <label for="trein-pergunta">Pergunta do paciente (como ele perguntaria)</label>
+      <label for="trein-pergunta">Pergunta do paciente</label>
+      <small class="form-hint">Escreva como o paciente perguntaria no WhatsApp</small>
       <textarea id="trein-pergunta" rows="2" placeholder="Ex: Fica perto do Posto Shell?">${item?.pergunta || ''}</textarea>
     </div>
     <div class="form-group">
-      <label for="trein-resposta">Resposta correta (como o bot deve responder)</label>
+      <label for="trein-resposta">Resposta correta</label>
+      <small class="form-hint">Como o bot deve responder (com a informação verdadeira)</small>
       <textarea id="trein-resposta" rows="3" placeholder="Ex: Na verdade ficamos no centro de Tijucas, na Rua Coronel Buchelle 752. Do Posto Shell fica uns 5km.">${item?.resposta || ''}</textarea>
     </div>
     <div class="form-group">
-      <label for="trein-tags">Palavras-chave (separadas por vírgula)</label>
+      <label for="trein-tags">Palavras-chave <span class="label-obrigatorio">*obrigatório</span></label>
+      <small class="form-hint">Palavras que o paciente usaria ao perguntar isso. Separe por vírgula.</small>
       <input type="text" id="trein-tags" placeholder="posto, shell, perto, referência" value="${(item?.palavras_chave || []).join(', ')}" />
-      <small style="color:var(--text-muted);font-size:.75rem">Ajudam o bot a encontrar essa resposta. Ex: posto, shell, perto</small>
+      <div id="trein-tags-sugestoes" class="tags-sugestoes"></div>
+      <div id="trein-tags-erro" class="form-field-error hidden">Adicione pelo menos 2 palavras-chave para o bot encontrar essa resposta</div>
+    </div>
+    <div class="treinamento-dica-box">
+      <strong>Dica:</strong> As palavras-chave são como o bot "encontra" essa resposta. Se alguém perguntar "tem estacionamento?",
+      o bot procura registros com as tags "estacionamento", "parar", "vaga". Quanto mais tags, melhor!
     </div>
   `;
 
@@ -195,8 +230,16 @@ function abrirModalTreinamento(item = null) {
     const tagsStr = document.getElementById('trein-tags').value.trim();
     const palavras_chave = tagsStr ? tagsStr.split(',').map(t => t.trim().toLowerCase()).filter(Boolean) : [];
 
+    // Validações
     if (!pergunta || !resposta) {
       toast('Preencha pergunta e resposta', 'error');
+      return;
+    }
+
+    if (palavras_chave.length < 2) {
+      document.getElementById('trein-tags-erro')?.classList.remove('hidden');
+      document.getElementById('trein-tags')?.focus();
+      toast('Adicione pelo menos 2 palavras-chave', 'error');
       return;
     }
 
@@ -217,11 +260,60 @@ function abrirModalTreinamento(item = null) {
 
       renderTreinamento();
       closeModal();
-      toast(isEdit ? 'Registro atualizado!' : 'Registro criado!', 'success', 3000);
+      toast(isEdit ? 'Registro atualizado! O bot já vai usar na próxima mensagem.' : 'Registro criado! O bot já vai usar na próxima mensagem.', 'success', 4000);
     } catch (err) {
       toast(`Erro ao salvar: ${err.message}`, 'error');
     }
   }});
+
+  // Setup auto-sugestão de tags após modal abrir
+  setTimeout(() => {
+    const perguntaEl = document.getElementById('trein-pergunta');
+    const respostaEl = document.getElementById('trein-resposta');
+    const tagsEl = document.getElementById('trein-tags');
+    const sugestoesEl = document.getElementById('trein-tags-sugestoes');
+    const erroEl = document.getElementById('trein-tags-erro');
+
+    if (!perguntaEl || !respostaEl || !tagsEl || !sugestoesEl) return;
+
+    const atualizarSugestoes = () => {
+      const pergunta = perguntaEl.value.trim();
+      const resposta = respostaEl.value.trim();
+      const tagsAtuais = tagsEl.value.toLowerCase().split(',').map(t => t.trim()).filter(Boolean);
+
+      if (!pergunta && !resposta) {
+        sugestoesEl.innerHTML = '';
+        return;
+      }
+
+      const sugestoes = gerarSugestoesTags(pergunta, resposta)
+        .filter(s => !tagsAtuais.includes(s));
+
+      if (sugestoes.length === 0) {
+        sugestoesEl.innerHTML = '';
+        return;
+      }
+
+      sugestoesEl.innerHTML = `<span class="sugestoes-label">Sugestões:</span> ` +
+        sugestoes.map(s => `<button type="button" class="tag-sugestao" data-tag="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('');
+
+      sugestoesEl.querySelectorAll('.tag-sugestao').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const current = tagsEl.value.trim();
+          tagsEl.value = current ? `${current}, ${btn.dataset.tag}` : btn.dataset.tag;
+          btn.remove();
+          erroEl?.classList.add('hidden');
+        });
+      });
+    };
+
+    perguntaEl.addEventListener('input', atualizarSugestoes);
+    respostaEl.addEventListener('input', atualizarSugestoes);
+    tagsEl.addEventListener('input', () => erroEl?.classList.add('hidden'));
+
+    // Gerar sugestões iniciais (para edição)
+    atualizarSugestoes();
+  }, 100);
 }
 
 export function abrirNovoTreinamento() {
