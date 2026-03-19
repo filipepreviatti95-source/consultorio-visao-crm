@@ -27,6 +27,7 @@ import { loadDashboard, renderDashboardMetrics, renderDashboardAgenda, renderDas
 import { loadKanban, renderKanban, setOpenModalPaciente } from './kanban.js';
 import { loadPacientes, renderPacientesTable, openModalPaciente, setupNovoPacienteBtns } from './pacientes.js';
 import { loadAgendamentos, renderAgendamentos, filtrarAgendamentosPorData, exportarAgendamentosCSV } from './agendamentos.js';
+import { loadTreinamento, initTreinamento } from './treinamento.js';
 
 // ── Callback: após login bem-sucedido ──
 
@@ -47,6 +48,7 @@ setOnAppInit(async () => {
   try { initDashboardFilters(); } catch (e) { console.error('[App] initDashboardFilters error:', e); }
   try { setupLogout(); } catch (e) { console.error('[App] setupLogout error:', e); }
   try { setupNovoPacienteBtns(); } catch (e) { console.error('[App] setupNovoPacienteBtns error:', e); }
+  try { initTreinamento(); } catch (e) { console.error('[App] initTreinamento error:', e); }
 
   // Botão "Limpar filtro" dos agendamentos (guard via dataset)
   const btnLimpar = document.getElementById('btn-limpar-filtro');
@@ -79,6 +81,7 @@ setPageLoader(async (page) => {
     case 'kanban':       await loadKanban();       break;
     case 'pacientes':    await loadPacientes();    break;
     case 'agendamentos': await loadAgendamentos(); break;
+    case 'treinamento':  await loadTreinamento();  break;
   }
 });
 

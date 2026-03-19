@@ -10,6 +10,7 @@ const PAGE_TITLES = {
   kanban:       'Kanban',
   pacientes:    'Pacientes',
   agendamentos: 'Agendamentos',
+  treinamento:  'Treinamento do Bot',
 };
 
 let pageLoader = null; // função injetada que carrega dados de cada página

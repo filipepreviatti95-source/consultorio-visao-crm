@@ -129,6 +129,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         <span>Agendamentos</span>
       </a>
+      <a href="#treinamento" class="nav-item" data-page="treinamento">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.3 4.7-3.3 6H8.3C6.3 13.7 5 11.5 5 9a7 7 0 0 1 7-7z"/><path d="M9 17v1a3 3 0 0 0 6 0v-1"/><line x1="12" y1="22" x2="12" y2="22"/></svg>
+        <span>Treinamento Bot</span>
+      </a>
     </nav>
 
     <div class="sidebar-footer">
@@ -468,6 +472,43 @@
         </div>
         <div id="agendamentos-container" class="agendamentos-container">
           <!-- Preenchido via JS -->
+        </div>
+      </section>
+
+      <!-- ══ TREINAMENTO DO BOT ══ -->
+      <section id="page-treinamento" class="page">
+        <div class="page-header-bar">
+          <h2 class="page-title">Treinamento do Bot</h2>
+          <div class="page-actions">
+            <div class="search-bar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="treinamento-search" placeholder="Buscar pergunta ou resposta..." />
+            </div>
+            <select id="treinamento-filter-cat" class="select-filter">
+              <option value="">Todas categorias</option>
+              <option value="localizacao">Localiza&ccedil;&atilde;o</option>
+              <option value="preco">Pre&ccedil;o / Pagamento</option>
+              <option value="horario">Hor&aacute;rio</option>
+              <option value="servico">Servi&ccedil;os</option>
+              <option value="consulta">Consulta</option>
+              <option value="oculos">&Oacute;culos / Lentes</option>
+              <option value="geral">Geral</option>
+            </select>
+            <span class="treinamento-counter" id="treinamento-count">0 registros</span>
+            <button class="btn btn-primary btn-sm" id="btn-novo-treinamento">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Novo Registro
+            </button>
+          </div>
+        </div>
+
+        <div class="treinamento-info-banner">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <p>Cadastre aqui perguntas e respostas corretas para o bot. Quando um paciente perguntar algo parecido, o bot vai usar essas respostas em vez de inventar.</p>
+        </div>
+
+        <div id="treinamento-list" class="treinamento-list">
+          <div class="skeleton-list"></div>
         </div>
       </section>
 

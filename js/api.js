@@ -202,6 +202,50 @@ export async function insertConversa(pacienteId, telefone, mensagem) {
   if (error) throw error;
 }
 
+// ── Base de Conhecimento (Treinamento do Bot) ──
+
+export async function fetchBaseConhecimento() {
+  const { data, error } = await db
+    .from('base_conhecimento')
+    .select('*')
+    .order('categoria', { ascending: true })
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error('[API] fetchBaseConhecimento error:', error.message);
+    return [];
+  }
+  return data || [];
+}
+
+export async function saveBaseConhecimento(id, payload) {
+  payload.updated_at = new Date().toISOString();
+  if (id) {
+    const { data, error } = await db.from('base_conhecimento').update(payload).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  } else {
+    const { data, error } = await db.from('base_conhecimento').insert(payload).select().single();
+    if (error) throw error;
+    return data;
+  }
+}
+
+export async function deleteBaseConhecimento(id) {
+  const { error } = await db.from('base_conhecimento').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function toggleBaseConhecimentoAtivo(id, ativo) {
+  const { data, error } = await db
+    .from('base_conhecimento')
+    .update({ ativo, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 // ── Webhook Auth ──
 
 const WEBHOOK_HEADERS = {
