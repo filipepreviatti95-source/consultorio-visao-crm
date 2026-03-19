@@ -4,6 +4,7 @@
  */
 
 import { db, State } from './config.js';
+import { normalizarTelefone, telefoneKey } from './utils.js';
 
 // ── Pacientes ──
 
@@ -116,10 +117,13 @@ export async function fetchConversasRecentes() {
   }
 
   // Agrupa: 1 por paciente, máx 12
+  // Usa telefoneKey normalizado para evitar duplicatas por formato diferente
   const vistas = new Set();
   const unicas = [];
   for (const conv of (data || [])) {
-    const chave = conv.paciente_id || conv.telefone || conv.id;
+    // Chave normalizada: paciente_id (se tiver), senão últimos 8 dígitos do telefone
+    const tel = conv.pacientes?.telefone || conv.telefone;
+    const chave = conv.paciente_id || (tel ? telefoneKey(tel) : conv.id);
     if (!vistas.has(chave)) {
       vistas.add(chave);
       unicas.push(conv);
@@ -137,20 +141,37 @@ export async function fetchConversasPaciente(pacienteId, telefone) {
     .eq('paciente_id', pacienteId)
     .order('created_at', { ascending: true });
 
-  // Busca por telefone (conversas do n8n sem paciente_id)
-  const nums = (telefone || '').replace(/\D/g, '');
-  const telefoneSemDDI = nums.startsWith('55') && nums.length >= 12 ? nums.slice(2) : nums;
-  const telefoneComDDI = nums.startsWith('55') ? nums : '55' + nums;
+  // Busca por TODAS variantes de telefone (pega conversas do bot, follow-up, etc)
+  let byTelefone = [];
+  if (telefone) {
+    const nums = String(telefone).replace(/\D/g, '');
+    const norm = normalizarTelefone(telefone);
+    const variantes = new Set();
+    variantes.add(nums);
+    if (norm) {
+      variantes.add(norm);
+      variantes.add(norm.slice(2));
+    }
+    const telefoneSemDDI = nums.startsWith('55') && nums.length >= 12 ? nums.slice(2) : nums;
+    const telefoneComDDI = nums.startsWith('55') ? nums : '55' + nums;
+    variantes.add(telefoneSemDDI);
+    variantes.add(telefoneComDDI);
 
-  const { data: byTelefone } = await db
-    .from('conversas')
-    .select('*')
-    .or(`telefone.eq.${nums},telefone.eq.${telefoneSemDDI},telefone.eq.${telefoneComDDI}`)
-    .is('paciente_id', null)
-    .order('created_at', { ascending: true });
+    const filtros = [...variantes].filter(v => v.length >= 8);
+    const orFilter = filtros.map(v => `telefone.eq.${v}`).join(',');
 
-  // Mescla e deduplica
-  const todas = [...(byId || []), ...(byTelefone || [])];
+    if (orFilter) {
+      const { data } = await db
+        .from('conversas')
+        .select('*')
+        .or(orFilter)
+        .order('created_at', { ascending: true });
+      byTelefone = data || [];
+    }
+  }
+
+  // Mescla e deduplica por ID
+  const todas = [...(byId || []), ...byTelefone];
   const vistas = new Set();
   const unicas = todas.filter(c => {
     if (vistas.has(c.id)) return false;
@@ -162,30 +183,51 @@ export async function fetchConversasPaciente(pacienteId, telefone) {
 }
 
 export async function deleteConversasPaciente(pacienteId, telefone) {
-  // Deleta por paciente_id
+  // Deleta por paciente_id (pega conversas vinculadas ao paciente)
   if (pacienteId) {
     const { error: e1 } = await db.from('conversas').delete().eq('paciente_id', pacienteId);
     if (e1) throw e1;
   }
 
-  // Deleta por telefone (conversas do bot sem paciente_id)
+  // Deleta por TODAS variantes de telefone (com/sem DDI, com/sem 9º dígito)
+  // SEM filtro paciente_id IS NULL — pega TODAS as conversas desse número
   if (telefone) {
-    const nums = (telefone || '').replace(/\D/g, '');
+    const nums = String(telefone).replace(/\D/g, '');
+    const norm = normalizarTelefone(telefone);
+    // Gera todas as variantes possíveis
+    const variantes = new Set();
+    variantes.add(nums);
+    if (norm) {
+      variantes.add(norm);                      // 55XXXXXXXXXXX
+      variantes.add(norm.slice(2));              // sem DDI
+      // Com/sem 9º dígito (celular BR)
+      if (norm.length === 13) variantes.add(norm.slice(0, 4) + norm.slice(5)); // remove 9
+      if (norm.length === 12) variantes.add(norm.slice(0, 4) + '9' + norm.slice(4)); // adiciona 9
+    }
     const telefoneSemDDI = nums.startsWith('55') && nums.length >= 12 ? nums.slice(2) : nums;
     const telefoneComDDI = nums.startsWith('55') ? nums : '55' + nums;
+    variantes.add(telefoneSemDDI);
+    variantes.add(telefoneComDDI);
 
-    const { error: e2 } = await db
-      .from('conversas')
-      .delete()
-      .or(`telefone.eq.${nums},telefone.eq.${telefoneSemDDI},telefone.eq.${telefoneComDDI}`)
-      .is('paciente_id', null);
-    if (e2) throw e2;
+    // Filtra variantes válidas (>= 8 dígitos)
+    const filtros = [...variantes].filter(v => v.length >= 8);
+    const orFilter = filtros.map(v => `telefone.eq.${v}`).join(',');
+
+    if (orFilter) {
+      const { error: e2 } = await db
+        .from('conversas')
+        .delete()
+        .or(orFilter);
+      if (e2) throw e2;
+    }
 
     // Limpa fila de debounce do bot (message_queue)
     try {
-      await db.from('message_queue')
-        .delete()
-        .or(`telefone.eq.${nums},telefone.eq.${telefoneSemDDI},telefone.eq.${telefoneComDDI}`);
+      if (orFilter) {
+        await db.from('message_queue')
+          .delete()
+          .or(orFilter);
+      }
     } catch { /* tabela pode não existir, ignora */ }
   }
 }
@@ -371,11 +413,20 @@ export async function syncGcalToSupabase(dataInicio, dataFim) {
 
     // 5. FORWARD SYNC — cria/atualiza do GCal → Supabase
     //    Usa porGcalId (já construído acima) para evitar N+1 queries
-    //    Busca pacientes em batch para novos eventos
-    const { data: allPacientes } = await db.from('pacientes').select('id, telefone');
-    const pacientePorTel = {};
+    //    Busca pacientes em batch para novos eventos — match por telefone normalizado + nome
+    const { data: allPacientes } = await db.from('pacientes').select('id, telefone, nome');
+    const pacientePorTelKey = {};
+    const pacientePorNome = {};
     for (const p of (allPacientes || [])) {
-      if (p.telefone) pacientePorTel[p.telefone.replace(/\D/g, '').slice(-8)] = p.id;
+      if (p.telefone) {
+        const key = telefoneKey(p.telefone);
+        if (key) pacientePorTelKey[key] = p.id;
+      }
+      if (p.nome) {
+        // Index por primeiro nome (lowercase) para fallback
+        const primeiro = p.nome.trim().split(/\s+/)[0].toLowerCase();
+        if (!pacientePorNome[primeiro]) pacientePorNome[primeiro] = p;
+      }
     }
 
     for (const ev of eventosGcal) {
@@ -385,28 +436,48 @@ export async function syncGcalToSupabase(dataInicio, dataFim) {
       const existente = porGcalId[ev.googleEventId]?.[0] || null;
 
       if (existente) {
+        // UPDATE: só atualiza data_hora e status do GCal
+        // PRESERVA: telefone e paciente_id do CRM (GCal não tem esses dados)
         const mudou = existente.status !== ev.status ||
           existente.data_hora?.slice(0, 16) !== ev.dataHora?.slice(0, 16);
-        if (mudou) {
-          await db.from('agendamentos').update({
-            status: ev.status,
-            data_hora: ev.dataHora,
-            updated_at: new Date().toISOString(),
-          }).eq('id', existente.id);
-          atualizados++;
+
+        const updatePayload = {};
+        if (existente.status !== ev.status) updatePayload.status = ev.status;
+        if (existente.data_hora?.slice(0, 16) !== ev.dataHora?.slice(0, 16)) updatePayload.data_hora = ev.dataHora;
+
+        // Se o agendamento não tem paciente_id, tenta vincular agora
+        if (!existente.paciente_id) {
+          const pid = matchPaciente(ev, existente, pacientePorTelKey, pacientePorNome);
+          if (pid) updatePayload.paciente_id = pid;
+        }
+
+        // Se o agendamento não tem telefone mas o evento tem, preenche
+        if (!existente.telefone && ev.telefone) {
+          const norm = normalizarTelefone(ev.telefone);
+          if (norm) updatePayload.telefone = norm;
+        }
+
+        if (Object.keys(updatePayload).length > 0) {
+          updatePayload.updated_at = new Date().toISOString();
+          await db.from('agendamentos').update(updatePayload).eq('id', existente.id);
+          if (mudou) atualizados++;
         }
       } else {
-        // Busca paciente_id no cache local
-        let pacienteId = null;
-        if (ev.telefone) {
-          const tel8 = ev.telefone.replace(/\D/g, '').slice(-8);
-          pacienteId = pacientePorTel[tel8] || null;
+        // INSERT novo — tenta vincular paciente
+        const pacienteId = matchPaciente(ev, null, pacientePorTelKey, pacientePorNome);
+        const telNorm = ev.telefone ? (normalizarTelefone(ev.telefone) || ev.telefone) : '';
+
+        // Se achou paciente e este tem telefone, usa o telefone do paciente
+        let telFinal = telNorm;
+        if (pacienteId && !telFinal) {
+          const pac = (allPacientes || []).find(p => p.id === pacienteId);
+          if (pac?.telefone) telFinal = normalizarTelefone(pac.telefone) || pac.telefone;
         }
 
         const { error: insertErr } = await db.from('agendamentos').insert({
           paciente_id: pacienteId,
           nome_paciente: ev.nome || 'Evento GCal',
-          telefone: ev.telefone || '',
+          telefone: telFinal,
           data_hora: ev.dataHora,
           status: ev.status || 'agendado',
           google_event_id: ev.googleEventId,
@@ -423,6 +494,23 @@ export async function syncGcalToSupabase(dataInicio, dataFim) {
           criados++;
         }
       }
+    }
+
+    /** Tenta vincular evento a um paciente por telefone ou nome */
+    function matchPaciente(ev, existente, porTelKey, porNome) {
+      // 1. Match por telefone (mais confiável)
+      const tel = ev.telefone || existente?.telefone;
+      if (tel) {
+        const key = telefoneKey(tel);
+        if (key && porTelKey[key]) return porTelKey[key];
+      }
+      // 2. Match por nome (fallback — primeiro nome do evento)
+      const nome = ev.nome || existente?.nome_paciente;
+      if (nome) {
+        const primeiro = nome.trim().split(/\s+/)[0].toLowerCase();
+        if (porNome[primeiro]) return porNome[primeiro].id;
+      }
+      return null;
     }
 
     // 6. Re-fetch agendamentos do Supabase para atualizar State

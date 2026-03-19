@@ -54,6 +54,41 @@ export function tempoDesde(date) {
   return fmtData(date);
 }
 
+// ── Normalização de Telefone ──
+
+/**
+ * Normaliza telefone para formato padrão: 55 + DDD(2) + número(8-9) = 12-13 dígitos.
+ * Retorna string só com dígitos ou null se inválido.
+ * Mesma lógica dos workflows n8n para consistência.
+ */
+export function normalizarTelefone(tel) {
+  if (!tel) return null;
+  let limpo = String(tel).replace(/\D/g, '');
+  if (limpo.length === 0) return null;
+  // 10-11 dígitos = DDD + número, falta o 55
+  if (limpo.length === 10 || limpo.length === 11) {
+    limpo = '55' + limpo;
+  }
+  // 12-13 dígitos começando com 55 = formato válido
+  if (limpo.length >= 12 && limpo.length <= 13 && limpo.startsWith('55')) {
+    return limpo;
+  }
+  return null;
+}
+
+/**
+ * Retorna os últimos 8 dígitos do telefone (DDD + número sem 9º dígito).
+ * Usado como chave de matching fuzzy entre telefones com/sem DDI.
+ */
+export function telefoneKey(tel) {
+  if (!tel) return '';
+  const norm = normalizarTelefone(tel);
+  if (norm) return norm.slice(-8);
+  // Fallback: últimos 8 dígitos do que tem
+  const nums = String(tel).replace(/\D/g, '');
+  return nums.length >= 8 ? nums.slice(-8) : nums;
+}
+
 // ── Helpers ──
 
 export function iniciais(nome) {

@@ -4,7 +4,7 @@
  */
 
 import { State } from './config.js';
-import { esc, fmtHora, fmtData, tempoDesde, iniciais, waLink, STATUS_LABEL, toast } from './utils.js';
+import { esc, fmtHora, fmtData, tempoDesde, iniciais, waLink, STATUS_LABEL, toast, telefoneKey } from './utils.js';
 import { fetchPacientes, fetchAgendamentos, fetchConversasRecentes, syncGcalToSupabase, updateAgendamentoField, sincronizarGcal } from './api.js';
 import { openChatPanel } from './chat.js';
 
@@ -375,13 +375,30 @@ export function renderDashboardMetrics() {
   }
 
   // 2. Taxa de Conversão — pacientes com ≥1 agendamento ativo (não-cancelado)
+  //    Match por paciente_id OU por telefone normalizado (últimos 8 dígitos)
   const totalContatos = State.pacientes.length;
-  const pacientesComAgendamento = new Set(
-    State.agendamentos
-      .filter(a => a.paciente_id && a.status !== 'cancelado')
-      .map(a => a.paciente_id)
+  const agAtivos = State.agendamentos.filter(a => a.status !== 'cancelado');
+
+  // Set de paciente_ids convertidos (match direto)
+  const convertidosIds = new Set(
+    agAtivos.filter(a => a.paciente_id).map(a => a.paciente_id)
   );
-  const convertidos = pacientesComAgendamento.size;
+
+  // Set de telefoneKeys dos agendamentos sem paciente_id (match por telefone)
+  const agTelKeys = new Set(
+    agAtivos.filter(a => !a.paciente_id && a.telefone).map(a => telefoneKey(a.telefone))
+  );
+
+  // Conta pacientes que têm agendamento (por ID ou por telefone)
+  let convertidos = 0;
+  for (const p of State.pacientes) {
+    if (convertidosIds.has(p.id)) {
+      convertidos++;
+    } else if (p.telefone && agTelKeys.has(telefoneKey(p.telefone))) {
+      convertidos++;
+    }
+  }
+
   const taxa = totalContatos > 0 ? Math.round((convertidos / totalContatos) * 100) : 0;
   setMetric('metric-conversao', taxa + '%');
   const subConv = document.getElementById('metric-conversao-sub');
