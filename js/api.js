@@ -116,21 +116,33 @@ export async function fetchConversasRecentes() {
     return;
   }
 
-  // Agrupa: 1 por paciente, máx 12
-  // Usa telefoneKey normalizado para evitar duplicatas por formato diferente
-  const vistas = new Set();
-  const unicas = [];
+  // Agrupa: 1 conversa por contato (telefone), máx 12
+  // Chave SEMPRE por telefoneKey para evitar duplicatas quando mesmo telefone
+  // tem mensagens com paciente_id preenchido E outras com NULL
+  const porChave = new Map(); // chave → conv (mantém a mais recente com melhor dados)
   for (const conv of (data || [])) {
-    // Chave normalizada: paciente_id (se tiver), senão últimos 8 dígitos do telefone
     const tel = conv.pacientes?.telefone || conv.telefone;
-    const chave = conv.paciente_id || (tel ? telefoneKey(tel) : conv.id);
-    if (!vistas.has(chave)) {
-      vistas.add(chave);
-      unicas.push(conv);
+    const chave = tel ? telefoneKey(tel) : (conv.paciente_id || conv.id);
+    if (!porChave.has(chave)) {
+      porChave.set(chave, conv);
+    } else {
+      // Já existe entrada para este telefone — preferir a que tem paciente_id + nome
+      const existente = porChave.get(chave);
+      const existenteTemNome = existente.paciente_id && existente.pacientes?.nome;
+      const novoTemNome = conv.paciente_id && conv.pacientes?.nome;
+      if (!existenteTemNome && novoTemNome) {
+        // Nova entrada tem dados melhores (nome do paciente) — substituir
+        // mas manter a mensagem mais recente (created_at)
+        porChave.set(chave, {
+          ...conv,
+          created_at: existente.created_at, // manter timestamp mais recente
+          mensagem: existente.mensagem,     // manter msg mais recente
+        });
+      }
     }
-    if (unicas.length >= 12) break;
+    if (porChave.size >= 12) break;
   }
-  State.conversasRecentes = unicas;
+  State.conversasRecentes = Array.from(porChave.values());
 }
 
 export async function fetchConversasPaciente(pacienteId, telefone) {
