@@ -95,7 +95,18 @@ function handleConversaInsert(payload) {
   if (eventType !== 'INSERT') return;
 
   const nova = payload.new;
-  State.conversas.push(nova);
+
+  // Só adiciona ao State.conversas se é do paciente com chat aberto (evita memory leak)
+  if (State.currentChatPaciente) {
+    const p = State.currentChatPaciente;
+    const mesmoId  = nova.paciente_id && nova.paciente_id === p.id;
+    const pNums    = (p.telefone || '').replace(/\D/g, '');
+    const novaNums = (nova.telefone || '').replace(/\D/g, '');
+    const mesmoTel = novaNums && pNums && (novaNums.endsWith(pNums) || pNums.endsWith(novaNums));
+    if (mesmoId || mesmoTel) {
+      State.conversas.push(nova);
+    }
+  }
 
   // Notificação sonora para mensagens de pacientes
   if (nova.remetente === 'paciente') {

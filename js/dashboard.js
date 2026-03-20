@@ -587,7 +587,7 @@ async function quickUpdateAgStatus(agId, novoStatus) {
     if (ag) {
       // Sync GCal — await garante que GCal reflete antes de seguir
       const acao = novoStatus === 'cancelado' ? 'cancelar' : 'atualizar';
-      await sincronizarGcal({
+      const gcalResult = await sincronizarGcal({
         acao,
         googleEventId: ag.google_event_id || null,
         nome: ag.nome_paciente,
@@ -596,6 +596,9 @@ async function quickUpdateAgStatus(agId, novoStatus) {
         obs: ag.observacoes || '',
         status: novoStatus,
       });
+      if (!gcalResult && ag.google_event_id) {
+        toast('Aviso: Google Calendar não sincronizou (tentará novamente)', 'warning', 4000);
+      }
     }
     renderDashboardAgenda();
     renderDashboardMetrics();

@@ -116,6 +116,14 @@ function onLogout() {
   stopDashboardPolling(); // para polling interval do dashboard
   State.realtimeChannels.forEach(ch => db.removeChannel(ch));
   State.realtimeChannels = [];
+  // Limpa TODOS os dados em memória para evitar leak entre contas
+  State.pacientes = [];
+  State.agendamentos = [];
+  State.conversas = [];
+  State.conversasRecentes = [];
+  State.currentChatPaciente = null;
+  State.currentPage = 'dashboard';
+  State.semanaOffset = 0;
   document.getElementById('app').classList.add('hidden');
   document.getElementById('login-screen').classList.remove('hidden');
   document.body.classList.remove('role-admin', 'role-funcionario');

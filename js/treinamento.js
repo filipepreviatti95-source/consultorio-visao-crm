@@ -6,7 +6,7 @@
 
 import { State } from './config.js';
 import { fetchBaseConhecimento, saveBaseConhecimento, deleteBaseConhecimento, toggleBaseConhecimentoAtivo } from './api.js';
-import { toast } from './utils.js';
+import { toast, esc } from './utils.js';
 import { openModal, closeModal } from './ui.js';
 
 let itens = [];
@@ -117,7 +117,7 @@ function renderTreinamento() {
       html += `
       <div class="treinamento-card ${inativo ? 'treinamento-card-inativo' : ''} ${semTags ? 'treinamento-card-sem-tags' : ''}" data-id="${item.id}">
         <div class="treinamento-card-header">
-          <div class="treinamento-pergunta">${escapeHtml(item.pergunta)}</div>
+          <div class="treinamento-pergunta">${esc(item.pergunta)}</div>
           <div class="treinamento-card-actions">
             <button class="tl-action-btn tl-action-edit treinamento-btn-edit" data-id="${item.id}" title="Editar">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -133,10 +133,10 @@ function renderTreinamento() {
             </button>
           </div>
         </div>
-        <div class="treinamento-resposta">${escapeHtml(item.resposta)}</div>
+        <div class="treinamento-resposta">${esc(item.resposta)}</div>
         ${semTags
           ? `<div class="treinamento-tags-aviso">⚠️ Sem palavras-chave — o bot pode não encontrar esta resposta</div>`
-          : `<div class="treinamento-tags">${item.palavras_chave.map(t => `<span class="treinamento-tag">${escapeHtml(t)}</span>`).join('')}</div>`
+          : `<div class="treinamento-tags">${item.palavras_chave.map(t => `<span class="treinamento-tag">${esc(t)}</span>`).join('')}</div>`
         }
       </div>`;
     }
@@ -295,7 +295,7 @@ function abrirModalTreinamento(item = null) {
       }
 
       sugestoesEl.innerHTML = `<span class="sugestoes-label">Sugestões:</span> ` +
-        sugestoes.map(s => `<button type="button" class="tag-sugestao" data-tag="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('');
+        sugestoes.map(s => `<button type="button" class="tag-sugestao" data-tag="${esc(s)}">${esc(s)}</button>`).join('');
 
       sugestoesEl.querySelectorAll('.tag-sugestao').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -340,8 +340,4 @@ export function initTreinamento() {
 }
 
 // ── Utils ──
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+// escapeHtml removido — agora usa esc() global de utils.js

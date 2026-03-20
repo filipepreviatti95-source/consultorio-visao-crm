@@ -3,7 +3,7 @@
  */
 
 import { State } from './config.js';
-import { esc, iniciais, STATUS_LABEL } from './utils.js';
+import { esc, iniciais, STATUS_LABEL, telefoneKey } from './utils.js';
 
 // ── Busca Global ──
 
@@ -53,9 +53,12 @@ export function initGlobalSearch() {
 function renderSearchResults(q, container) {
   if (!q) { container.innerHTML = ''; return; }
   const lower = q.toLowerCase();
+  const qNums = q.replace(/\D/g, ''); // extrai só dígitos para busca por telefone
+  const qTelKey = qNums.length >= 4 ? qNums : ''; // só busca por tel se >= 4 dígitos
   const matches = State.pacientes.filter(p =>
     p.nome.toLowerCase().includes(lower) ||
     (p.telefone && p.telefone.includes(q)) ||
+    (qTelKey && p.telefone && telefoneKey(p.telefone).includes(qTelKey)) ||
     (p.email && p.email.toLowerCase().includes(lower))
   ).slice(0, 8);
 
@@ -103,7 +106,13 @@ export function initModal() {
     if (e.target === overlay) closeModal();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeModal();
+    if (e.key === 'Escape') {
+      // Só fecha se o modal está visível (evita conflito com chat-panel e search)
+      const overlay = document.getElementById('modal-overlay');
+      if (overlay && !overlay.classList.contains('hidden')) {
+        closeModal();
+      }
+    }
   });
 }
 

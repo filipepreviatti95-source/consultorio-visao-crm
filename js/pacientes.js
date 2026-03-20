@@ -3,7 +3,7 @@
  */
 
 import { State, isAdmin } from './config.js';
-import { esc, fmtData, waLink, STATUS_LABEL, toast } from './utils.js';
+import { esc, fmtData, waLink, STATUS_LABEL, toast, normalizarTelefone } from './utils.js';
 import { fetchPacientes, savePaciente, deletePaciente } from './api.js';
 import { openModal, closeModal } from './ui.js';
 import { openChatPanel } from './chat.js';
@@ -11,7 +11,7 @@ import { renderKanban } from './kanban.js';
 import { renderDashboardMetrics } from './dashboard.js';
 
 export async function loadPacientes() {
-  if (State.pacientes.length === 0) await fetchPacientes();
+  await fetchPacientes(); // Sempre re-fetch para dados frescos
   renderPacientesTable(State.pacientes);
   setupPacientesFilters();
 }
@@ -156,9 +156,12 @@ async function handleSavePaciente(id) {
 
   if (!nome || !telefone) { toast('Nome e telefone são obrigatórios', 'warning'); return; }
 
+  // Normaliza telefone para formato padrão (55+DDD+número)
+  const telNorm = normalizarTelefone(telefone) || telefone;
+
   try {
     await savePaciente(id, {
-      nome, telefone, status,
+      nome, telefone: telNorm, status,
       email: email || null,
       data_nascimento: nasc || null,
       observacoes: obs || null,

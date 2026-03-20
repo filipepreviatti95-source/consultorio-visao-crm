@@ -16,8 +16,7 @@ export function setOpenModalPaciente(fn) {
 }
 
 export async function loadKanban() {
-  if (State.pacientes.length === 0) await fetchPacientes();
-  if (State.agendamentos.length === 0) await fetchAgendamentos();
+  await Promise.all([fetchPacientes(), fetchAgendamentos()]); // Sempre re-fetch
   renderKanban(State.pacientes);
   if (!kanbanDragSetup) {
     setupKanbanDragDrop();
@@ -203,6 +202,8 @@ function setupKanbanCollapseCancel() {
 // ── Confetti 🎉 ──
 
 function launchConfetti() {
+  // Respeita preferência de acessibilidade
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const container = document.getElementById('kanban-board') || document.body;
   const colors = ['#00A86B', '#0066CC', '#F59E0B', '#EF4444', '#7C3AED', '#EC4899'];
   const count = 60;

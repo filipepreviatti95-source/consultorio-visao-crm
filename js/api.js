@@ -504,16 +504,10 @@ export async function syncGcalToSupabase(dataInicio, dataFim) {
     //    Busca pacientes em batch para novos eventos — match por telefone normalizado + nome
     const { data: allPacientes } = await db.from('pacientes').select('id, telefone, nome');
     const pacientePorTelKey = {};
-    const pacientePorNome = {};
     for (const p of (allPacientes || [])) {
       if (p.telefone) {
         const key = telefoneKey(p.telefone);
         if (key) pacientePorTelKey[key] = p.id;
-      }
-      if (p.nome) {
-        // Index por primeiro nome (lowercase) para fallback
-        const primeiro = p.nome.trim().split(/\s+/)[0].toLowerCase();
-        if (!pacientePorNome[primeiro]) pacientePorNome[primeiro] = p;
       }
     }
 
@@ -535,7 +529,7 @@ export async function syncGcalToSupabase(dataInicio, dataFim) {
 
         // Se o agendamento não tem paciente_id, tenta vincular agora
         if (!existente.paciente_id) {
-          const pid = matchPaciente(ev, existente, pacientePorTelKey, pacientePorNome);
+          const pid = matchPaciente(ev, existente, pacientePorTelKey);
           if (pid) updatePayload.paciente_id = pid;
         }
 
@@ -552,7 +546,7 @@ export async function syncGcalToSupabase(dataInicio, dataFim) {
         }
       } else {
         // INSERT novo — tenta vincular paciente
-        const pacienteId = matchPaciente(ev, null, pacientePorTelKey, pacientePorNome);
+        const pacienteId = matchPaciente(ev, null, pacientePorTelKey);
         const telNorm = ev.telefone ? (normalizarTelefone(ev.telefone) || ev.telefone) : '';
 
         // Se achou paciente e este tem telefone, usa o telefone do paciente
@@ -584,19 +578,23 @@ export async function syncGcalToSupabase(dataInicio, dataFim) {
       }
     }
 
-    /** Tenta vincular evento a um paciente por telefone ou nome */
-    function matchPaciente(ev, existente, porTelKey, porNome) {
+    /** Tenta vincular evento a um paciente por telefone ou nome completo */
+    function matchPaciente(ev, existente, porTelKey) {
       // 1. Match por telefone (mais confiável)
       const tel = ev.telefone || existente?.telefone;
       if (tel) {
         const key = telefoneKey(tel);
         if (key && porTelKey[key]) return porTelKey[key];
       }
-      // 2. Match por nome (fallback — primeiro nome do evento)
+      // 2. Match por nome COMPLETO (fallback — evita false positive com primeiro nome)
       const nome = ev.nome || existente?.nome_paciente;
       if (nome) {
-        const primeiro = nome.trim().split(/\s+/)[0].toLowerCase();
-        if (porNome[primeiro]) return porNome[primeiro].id;
+        const nomeNorm = nome.trim().toLowerCase();
+        // Tenta match exato no nome completo primeiro
+        const pacExato = (allPacientes || []).find(p =>
+          p.nome && p.nome.trim().toLowerCase() === nomeNorm
+        );
+        if (pacExato) return pacExato.id;
       }
       return null;
     }

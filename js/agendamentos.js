@@ -4,14 +4,13 @@
  */
 
 import { State, isAdmin } from './config.js';
-import { esc, fmtData, fmtHora, STATUS_LABEL, STATUS_COLOR, toast } from './utils.js';
+import { esc, fmtData, fmtHora, STATUS_LABEL, STATUS_COLOR, toast, normalizarTelefone } from './utils.js';
 import { fetchAgendamentos, fetchPacientes, saveAgendamento, deleteAgendamento, updateAgendamentoField, sincronizarGcal, syncGcalToSupabase } from './api.js';
 import { openModal, closeModal } from './ui.js';
-import { renderDashboardAgendamentos, renderDashboardMetrics } from './dashboard.js';
+import { renderDashboardAgenda, renderDashboardMetrics } from './dashboard.js';
 
 export async function loadAgendamentos() {
-  if (State.agendamentos.length === 0) await fetchAgendamentos();
-  if (State.pacientes.length === 0) await fetchPacientes();
+  await Promise.all([fetchAgendamentos(), fetchPacientes()]); // Sempre re-fetch
   setupAgendamentosNav();
   renderAgendamentos();
 }
@@ -264,7 +263,7 @@ function confirmarDeleteAgendamento(id) {
         closeModal();
         toast('Agendamento excluído (GCal também)', 'success');
         renderAgendamentos();
-        renderDashboardAgendamentos();
+        renderDashboardAgenda();
         renderDashboardMetrics();
       } catch (err) {
         toast(`Erro ao excluir: ${err.message}`, 'error');
@@ -363,12 +362,15 @@ async function handleSaveAgendamento(id, googleEventIdAtual) {
     return;
   }
 
+  // Normaliza telefone para formato padrão (55+DDD+número)
+  const telNorm = normalizarTelefone(telefone) || telefone;
+
   const dataHoraISO = new Date(dataHora).toISOString();
 
   try {
     const savedData = await saveAgendamento(id, {
       nome_paciente: nome,
-      telefone,
+      telefone: telNorm,
       data_hora: dataHoraISO,
       status,
       observacoes: obs || null,
@@ -398,7 +400,7 @@ async function handleSaveAgendamento(id, googleEventIdAtual) {
     }
 
     renderAgendamentos();
-    renderDashboardAgendamentos();
+    renderDashboardAgenda();
     renderDashboardMetrics();
   } catch (err) {
     toast(`Erro: ${err.message}`, 'error');
