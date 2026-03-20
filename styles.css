@@ -1669,9 +1669,41 @@ input, select, textarea { font-family: inherit; }
 .chat-wa-btn-link { color: #4ADE80; border-color: rgba(74,222,128,.25); }
 .chat-wa-btn-link:hover { background: rgba(74,222,128,.2); color: #4ADE80; }
 
+.chat-followup-btn { color: #FBBF24; border-color: rgba(251,191,36,.25); padding: .4rem; }
+.chat-followup-btn:hover { background: rgba(251,191,36,.2); color: #FBBF24; }
+.chat-followup-btn.is-paused { color: #4ADE80; border-color: rgba(74,222,128,.25); }
+.chat-followup-btn.is-paused:hover { background: rgba(74,222,128,.2); color: #4ADE80; }
+.chat-followup-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.chat-schedule-btn { color: #60A5FA; border-color: rgba(96,165,250,.25); padding: .4rem; }
+.chat-schedule-btn:hover { background: rgba(96,165,250,.2); color: #60A5FA; }
+
 .chat-delete-btn { color: #F87171; border-color: rgba(248,113,113,.25); padding: .4rem; }
 .chat-delete-btn:hover { background: rgba(248,113,113,.2); color: #F87171; }
 .chat-delete-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── Scheduled Messages List (inside modal) ── */
+.scheduled-list { margin-bottom: .75rem; }
+.scheduled-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .5rem .65rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: .35rem;
+}
+.scheduled-info { display: flex; flex-direction: column; gap: .15rem; flex: 1; min-width: 0; }
+.scheduled-date { font-size: .75rem; font-weight: 600; color: var(--text-primary); }
+.scheduled-msg { font-size: .72rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.btn-cancel-scheduled {
+  background: none; border: none; color: #F87171; font-size: 1.2rem; font-weight: 700;
+  cursor: pointer; padding: .2rem .4rem; border-radius: var(--radius-sm); flex-shrink: 0;
+  line-height: 1;
+}
+.btn-cancel-scheduled:hover { background: rgba(248,113,113,.15); }
+.btn-cancel-scheduled:disabled { opacity: .5; cursor: not-allowed; }
 
 .chat-close-btn {
   padding: .4rem;

@@ -244,6 +244,94 @@ export async function insertConversa(pacienteId, telefone, mensagem) {
   if (error) throw error;
 }
 
+// ── Follow-up Management ──
+
+/**
+ * Pausa follow-ups automáticos para um paciente.
+ * Seta follow_ups_enviados=3 para bloquear todos os workflows.
+ */
+export async function pauseFollowUps(pacienteId) {
+  const { data, error } = await db
+    .from('pacientes')
+    .update({
+      follow_ups_enviados: 3,
+      ultimo_follow_up: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', pacienteId)
+    .select()
+    .single();
+  if (error) throw error;
+  const idx = State.pacientes.findIndex(p => p.id === pacienteId);
+  if (idx >= 0) State.pacientes[idx] = data;
+  return data;
+}
+
+/**
+ * Reativa follow-ups automáticos para um paciente.
+ * Reseta follow_ups_enviados=0.
+ */
+export async function resumeFollowUps(pacienteId) {
+  const { data, error } = await db
+    .from('pacientes')
+    .update({
+      follow_ups_enviados: 0,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', pacienteId)
+    .select()
+    .single();
+  if (error) throw error;
+  const idx = State.pacientes.findIndex(p => p.id === pacienteId);
+  if (idx >= 0) State.pacientes[idx] = data;
+  return data;
+}
+
+/**
+ * Agenda uma mensagem futura para um paciente.
+ * Insere na tabela mensagens_agendadas (processada pelo workflow diário).
+ */
+export async function agendarMensagem({ telefone, nome, mensagem, enviarEm, pacienteId }) {
+  const { data, error } = await db
+    .from('mensagens_agendadas')
+    .insert({
+      telefone,
+      nome,
+      mensagem,
+      enviar_em: enviarEm,
+      paciente_id: pacienteId,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Lista mensagens agendadas pendentes de um paciente.
+ */
+export async function fetchMensagensAgendadas(pacienteId) {
+  const { data, error } = await db
+    .from('mensagens_agendadas')
+    .select('*')
+    .eq('paciente_id', pacienteId)
+    .eq('enviada', false)
+    .order('enviar_em', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Cancela (deleta) uma mensagem agendada específica.
+ */
+export async function cancelarMensagemAgendada(msgId) {
+  const { error } = await db
+    .from('mensagens_agendadas')
+    .delete()
+    .eq('id', msgId);
+  if (error) throw error;
+}
+
 // ── Base de Conhecimento (Treinamento do Bot) ──
 
 export async function fetchBaseConhecimento() {
