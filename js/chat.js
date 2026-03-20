@@ -224,10 +224,8 @@ async function handleScheduleFollowUp() {
       </div>`
     : '';
 
-  // Data mínima = amanhã
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const minDate = tomorrow.toISOString().slice(0, 10);
+  // Data mínima = hoje (workflow roda a cada hora)
+  const minDate = new Date().toISOString().slice(0, 10);
 
   const body = `
     ${listaPendentes}
