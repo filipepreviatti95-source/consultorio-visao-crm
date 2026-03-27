@@ -1780,6 +1780,39 @@ input, select, textarea { font-family: inherit; }
   padding: 0 .4rem;
 }
 
+/* ── Bubble Row (msg + delete btn) ── */
+.msg-bubble-row {
+  display: flex;
+  align-items: flex-end;
+  gap: .35rem;
+}
+.from-me .msg-bubble-row { flex-direction: row-reverse; }
+
+.btn-delete-msg {
+  opacity: .3;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: .25rem;
+  border-radius: 50%;
+  color: var(--text-muted);
+  transition: opacity .15s, color .15s, background .15s;
+  flex-shrink: 0;
+  align-self: center;
+  line-height: 0;
+}
+.msg-bubble-wrap:hover .btn-delete-msg {
+  opacity: .7;
+}
+.btn-delete-msg:hover {
+  opacity: 1 !important;
+  color: var(--color-danger, #ef4444);
+  background: rgba(239,68,68,.1);
+}
+@media (hover: none) {
+  .btn-delete-msg { opacity: .4; }
+}
+
 /* ── Chat Input ── */
 .chat-input-bar {
   display: flex;

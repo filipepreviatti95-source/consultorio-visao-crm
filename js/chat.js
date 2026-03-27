@@ -5,7 +5,7 @@
 import { State } from './config.js';
 import { iniciais, waLink, esc, fmtData, tempoDesde, toast } from './utils.js';
 import {
-  fetchConversasPaciente, insertConversa, sendWhatsApp, deleteConversasPaciente,
+  fetchConversasPaciente, insertConversa, sendWhatsApp, deleteConversasPaciente, deleteConversa,
   pauseFollowUps, resumeFollowUps, agendarMensagem, fetchMensagensAgendadas, cancelarMensagemAgendada,
 } from './api.js';
 import { openModal, closeModal } from './ui.js';
@@ -114,12 +114,28 @@ export function renderChatMessages(msgs) {
     const wrapClass = fromMe ? 'from-me' + (msg.remetente === 'humano' ? ' from-humano' : '') : 'from-other';
     const label     = msg.remetente === 'assistente' ? 'Assistente' : msg.remetente === 'humano' ? 'Equipe' : 'Paciente';
     return `
-      <div class="msg-bubble-wrap ${wrapClass}">
+      <div class="msg-bubble-wrap ${wrapClass}" data-msg-id="${msg.id}">
         <div class="msg-sender-label">${fromMe ? label : 'Paciente'}</div>
-        <div class="msg-bubble">${esc(msg.mensagem)}</div>
+        <div class="msg-bubble-row">
+          <div class="msg-bubble">${esc(msg.mensagem)}</div>
+          <button class="btn-delete-msg" title="Apagar mensagem" data-msg-id="${msg.id}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+              <path d="M10 11v6"/><path d="M14 11v6"/>
+            </svg>
+          </button>
+        </div>
         <div class="msg-time">${tempoDesde(msg.created_at)}</div>
       </div>`;
   }).join('');
+
+  // Bind delete buttons
+  container.querySelectorAll('.btn-delete-msg').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleDeleteSingleMsg(btn.dataset.msgId);
+    });
+  });
 
   container.scrollTop = container.scrollHeight;
 }
@@ -144,6 +160,22 @@ async function handleDeleteHistory() {
     toast(`Erro ao apagar: ${err.message}`, 'error');
   } finally {
     if (btn) btn.disabled = false;
+  }
+}
+
+async function handleDeleteSingleMsg(msgId) {
+  if (!msgId) return;
+  if (!confirm('Apagar esta mensagem do CRM?')) return;
+
+  try {
+    await deleteConversa(msgId);
+    // Remove do State local e re-renderiza
+    State.conversas = State.conversas.filter(m => m.id !== msgId);
+    renderChatMessages(State.conversas);
+    toast('Mensagem apagada', 'info', 2000);
+  } catch (err) {
+    console.error('[Chat] Erro ao deletar mensagem:', err);
+    toast(`Erro: ${err.message}`, 'error');
   }
 }
 

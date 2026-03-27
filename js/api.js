@@ -244,6 +244,11 @@ export async function deleteConversasPaciente(pacienteId, telefone) {
   }
 }
 
+export async function deleteConversa(id) {
+  const { error } = await db.from('conversas').delete().eq('id', id);
+  if (error) throw error;
+}
+
 export async function insertConversa(pacienteId, telefone, mensagem) {
   const { error } = await db.from('conversas').insert({
     paciente_id: pacienteId,
