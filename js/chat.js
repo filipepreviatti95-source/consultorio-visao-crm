@@ -7,6 +7,7 @@ import { iniciais, waLink, esc, fmtData, tempoDesde, toast } from './utils.js';
 import {
   fetchConversasPaciente, insertConversa, sendWhatsApp, deleteConversasPaciente, deleteConversa,
   pauseFollowUps, resumeFollowUps, agendarMensagem, fetchMensagensAgendadas, cancelarMensagemAgendada,
+  toggleBotPaciente,
 } from './api.js';
 import { openModal, closeModal } from './ui.js';
 
@@ -35,6 +36,10 @@ export function initChatPanel() {
   // Botão Agendar Mensagem
   const scheduleBtn = document.getElementById('chat-schedule-followup');
   if (scheduleBtn) scheduleBtn.addEventListener('click', handleScheduleFollowUp);
+
+  // Botão Pausar/Reativar Bot (por paciente)
+  const botPauseBtn = document.getElementById('chat-pause-bot');
+  if (botPauseBtn) botPauseBtn.addEventListener('click', handleToggleBotPaciente);
 
   // Clique fora do modal (no padding do chat-panel) também fecha
   const panelEl = document.getElementById('chat-panel');
@@ -69,6 +74,9 @@ export async function openChatPanel(paciente) {
 
   // Atualiza visual do botão de follow-up (pausado ou ativo)
   updateFollowUpButton(paciente);
+
+  // Atualiza visual do botão de pausar bot (por paciente)
+  updateBotPauseButton(paciente);
 
   const msgContainer = document.getElementById('chat-messages');
   msgContainer.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text-muted);font-size:.8rem">Carregando…</div>';
@@ -321,6 +329,47 @@ async function handleScheduleFollowUp() {
       });
     });
   }, 100);
+}
+
+// ── Bot Pause (por paciente) ──
+
+function updateBotPauseButton(paciente) {
+  const btn = document.getElementById('chat-pause-bot');
+  if (!btn) return;
+  const paused = paciente && paciente.bot_pausado === true;
+  btn.classList.toggle('is-paused', paused);
+  btn.title = paused ? 'Bot pausado para este paciente — clique para reativar' : 'Pausar bot para este paciente';
+  btn.innerHTML = paused
+    ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.3 4.7-3.3 6H8.3C6.3 13.7 5 11.5 5 9a7 7 0 0 1 7-7z"/><path d="M9 17v1a3 3 0 0 0 6 0v-1"/><line x1="4" y1="4" x2="20" y2="20" stroke="#ef4444" stroke-width="2.5"/></svg>`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.3 4.7-3.3 6H8.3C6.3 13.7 5 11.5 5 9a7 7 0 0 1 7-7z"/><path d="M9 17v1a3 3 0 0 0 6 0v-1"/></svg>`;
+}
+
+async function handleToggleBotPaciente() {
+  const paciente = State.currentChatPaciente;
+  if (!paciente) return;
+
+  const paused = paciente.bot_pausado === true;
+  const msg = paused
+    ? `Reativar o bot automático para ${paciente.nome}?\n\nO paciente voltará a receber respostas automáticas do bot.`
+    : `Pausar o bot automático para ${paciente.nome}?\n\nO bot NÃO responderá mais a este paciente. Somente a equipe poderá responder manualmente pelo CRM.`;
+
+  if (!confirm(msg)) return;
+
+  const btn = document.getElementById('chat-pause-bot');
+  if (btn) btn.disabled = true;
+
+  try {
+    const updated = await toggleBotPaciente(paciente.id, !paused);
+    Object.assign(paciente, updated);
+    State.currentChatPaciente = paciente;
+    updateBotPauseButton(paciente);
+    toast(paused ? 'Bot reativado para este paciente' : 'Bot pausado para este paciente', 'success', 3000);
+  } catch (err) {
+    console.error('[Chat] Erro ao alterar bot:', err);
+    toast(`Erro: ${err.message}`, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 // ── Send Chat Message ──

@@ -4,8 +4,8 @@
  */
 
 import { State } from './config.js';
-import { fetchConversasRecentes } from './api.js';
-import { unlockAudio } from './utils.js';
+import { fetchConversasRecentes, getBotGlobalStatus, toggleBotGlobal } from './api.js';
+import { unlockAudio, toast } from './utils.js';
 
 // Auth
 import { initAuth, setOnAppInit, setupLogout } from './auth.js';
@@ -47,6 +47,7 @@ setOnAppInit(async () => {
   try { initChatPanel(); } catch (e) { console.error('[App] initChatPanel error:', e); }
   try { initDashboardFilters(); } catch (e) { console.error('[App] initDashboardFilters error:', e); }
   try { setupLogout(); } catch (e) { console.error('[App] setupLogout error:', e); }
+  try { initBotGlobalToggle(); } catch (e) { console.error('[App] initBotGlobalToggle error:', e); }
   try { setupNovoPacienteBtns(); } catch (e) { console.error('[App] setupNovoPacienteBtns error:', e); }
   try { initTreinamento(); } catch (e) { console.error('[App] initTreinamento error:', e); }
 
@@ -130,6 +131,58 @@ setOpenModalPaciente((paciente) => {
 
 window.filtrarAgendamentosPorData = filtrarAgendamentosPorData;
 window.exportarAgendamentosCSV    = exportarAgendamentosCSV;
+
+// ── Bot Global Toggle ──
+
+async function initBotGlobalToggle() {
+  const btn = document.getElementById('bot-global-toggle');
+  if (!btn) return;
+
+  // Checar status atual do workflow
+  const ativo = await getBotGlobalStatus();
+  updateBotGlobalUI(ativo);
+
+  btn.addEventListener('click', async () => {
+    const atualAtivo = !btn.classList.contains('bot-off');
+    const acao = atualAtivo ? 'DESATIVAR' : 'ATIVAR';
+    const msg = atualAtivo
+      ? 'Desativar o bot geral?\n\nNenhum paciente receberá respostas automáticas. Somente a equipe poderá responder pelo CRM.'
+      : 'Reativar o bot geral?\n\nTodos os pacientes voltarão a receber respostas automáticas (exceto os pausados individualmente).';
+
+    if (!confirm(msg)) return;
+
+    btn.disabled = true;
+    try {
+      const novoEstado = await toggleBotGlobal(!atualAtivo);
+      updateBotGlobalUI(novoEstado);
+      toast(novoEstado ? 'Bot ATIVADO' : 'Bot DESATIVADO', novoEstado ? 'success' : 'warning', 3000);
+    } catch (err) {
+      console.error('[App] Erro ao toggle bot global:', err);
+      toast(`Erro: ${err.message}`, 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+function updateBotGlobalUI(ativo) {
+  const btn = document.getElementById('bot-global-toggle');
+  const iconOn = document.getElementById('icon-bot-on');
+  const iconOff = document.getElementById('icon-bot-off');
+  if (!btn) return;
+
+  if (ativo) {
+    btn.classList.remove('bot-off');
+    btn.title = 'Bot ativo — clique para desativar';
+    if (iconOn) iconOn.style.display = '';
+    if (iconOff) iconOff.style.display = 'none';
+  } else {
+    btn.classList.add('bot-off');
+    btn.title = 'Bot DESATIVADO — clique para reativar';
+    if (iconOn) iconOn.style.display = 'none';
+    if (iconOff) iconOff.style.display = '';
+  }
+}
 
 // ── Boot ──
 
