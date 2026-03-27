@@ -276,36 +276,29 @@ export async function toggleBotPaciente(pacienteId, pausado) {
   return data;
 }
 
-// ── Bot Pause (geral — ativa/desativa workflow n8n) ──
-
-const N8N_API = 'https://n8n.srv1474226.hstgr.cloud/api/v1';
-const N8N_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxYWFmMWMyNi0zMjQwLTQ4YmYtYjcxZS04MWM1NjQzNzRlNjYiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiNDEyZDRjMTctYTM1OC00ZTgyLWIwOGQtYzY0YjUzNmE4Y2E2IiwiaWF0IjoxNzczMzc3MzYzfQ.O6bW_vdmQStjwgnN0sNbRupZetIR0ru0mgAQAXegWJQ';
-const WORKFLOW_BOT_ID = '6tphz1TmSJHV2WJO';
+// ── Bot Pause (geral — flag na tabela config do Supabase) ──
 
 export async function getBotGlobalStatus() {
   try {
-    const res = await fetch(`${N8N_API}/workflows/${WORKFLOW_BOT_ID}`, {
-      headers: { 'X-N8N-API-KEY': N8N_KEY },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const wf = await res.json();
-    return wf.active === true;
+    const { data, error } = await db
+      .from('config')
+      .select('valor')
+      .eq('chave', 'bot_global_ativo')
+      .single();
+    if (error) throw error;
+    return data.valor === 'true';
   } catch (err) {
     console.error('[API] getBotGlobalStatus error:', err);
-    return null; // desconhecido
+    return null;
   }
 }
 
 export async function toggleBotGlobal(ativar) {
-  const action = ativar ? 'activate' : 'deactivate';
-  const res = await fetch(`${N8N_API}/workflows/${WORKFLOW_BOT_ID}/${action}`, {
-    method: 'POST',
-    headers: { 'X-N8N-API-KEY': N8N_KEY },
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Erro ao ${action} bot: ${text}`);
-  }
+  const { error } = await db
+    .from('config')
+    .update({ valor: ativar ? 'true' : 'false', updated_at: new Date().toISOString() })
+    .eq('chave', 'bot_global_ativo');
+  if (error) throw error;
   return ativar;
 }
 
