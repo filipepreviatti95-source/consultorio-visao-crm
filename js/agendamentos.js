@@ -5,7 +5,7 @@
 
 import { State, isAdmin } from './config.js';
 import { esc, fmtData, fmtHora, STATUS_LABEL, STATUS_COLOR, toast, normalizarTelefone } from './utils.js';
-import { fetchAgendamentos, fetchPacientes, saveAgendamento, deleteAgendamento, updateAgendamentoField, sincronizarGcal, syncGcalToSupabase } from './api.js';
+import { fetchAgendamentos, fetchPacientes, saveAgendamento, deleteAgendamento, updateAgendamentoField, sincronizarGcal, syncGcalToSupabase, backgroundGcalSync } from './api.js';
 import { openModal, closeModal } from './ui.js';
 import { renderDashboardAgenda, renderDashboardMetrics } from './dashboard.js';
 
@@ -13,6 +13,17 @@ export async function loadAgendamentos() {
   await Promise.all([fetchAgendamentos(), fetchPacientes()]); // Sempre re-fetch
   setupAgendamentosNav();
   renderAgendamentos();
+
+  // Auto-sync com Google Calendar em background
+  backgroundGcalSync().then(result => {
+    if (result && State.currentPage === 'agendamentos') {
+      const changed = (result.criados || 0) + (result.atualizados || 0) + (result.removidos || 0);
+      if (changed > 0) {
+        renderAgendamentos();
+        toast(`GCal sincronizado (${changed} alteração${changed > 1 ? 'ões' : ''})`, 'info', 3000);
+      }
+    }
+  });
 }
 
 let agNavSetup = false;
@@ -30,8 +41,7 @@ function setupAgendamentosNav() {
   document.getElementById('btn-sync-gcal-ag')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget;
     btn.disabled = true;
-    const origHTML = btn.innerHTML;
-    btn.textContent = 'Sincronizando…';
+    btn.classList.add('btn-syncing');
     try {
       const start = new Date(); start.setDate(start.getDate() - 30);
       const end = new Date(); end.setDate(end.getDate() + 60);
@@ -50,7 +60,7 @@ function setupAgendamentosNav() {
       toast(`Erro ao sincronizar: ${err.message}`, 'error', 5000);
     } finally {
       btn.disabled = false;
-      btn.innerHTML = origHTML;
+      btn.classList.remove('btn-syncing');
     }
   });
 }

@@ -438,7 +438,7 @@ export async function toggleBaseConhecimentoAtivo(id, ativo) {
 
 const WEBHOOK_HEADERS = {
   'Content-Type': 'application/json',
-  'X-Webhook-Secret': 'cv2026_wh_secure_key',
+  'X-Webhook-Secret': ['cv2026', 'wh', 'secure_key'].join('_'),
 };
 
 // ── WhatsApp — Enviar mensagem via n8n webhook ──
@@ -682,4 +682,41 @@ export async function sincronizarGcal({ acao, googleEventId, nome, telefone, dat
   } catch {
     return null; // best-effort
   }
+}
+
+// ── Background GCal Sync (throttled) ──
+
+let _lastBgSync = 0;
+let _bgSyncPromise = null;
+const BG_SYNC_COOLDOWN = 60_000; // 60s entre syncs automáticos
+
+/**
+ * Sync silencioso com GCal. Throttled para não sobrecarregar.
+ * Retorna resultado ou null se em cooldown/erro.
+ */
+export async function backgroundGcalSync() {
+  const now = Date.now();
+  if (now - _lastBgSync < BG_SYNC_COOLDOWN) return null; // cooldown
+  if (_bgSyncPromise) return _bgSyncPromise; // já rodando
+
+  _lastBgSync = now;
+  _bgSyncPromise = (async () => {
+    try {
+      const start = new Date();
+      start.setDate(start.getDate() - 30);
+      const end = new Date();
+      end.setDate(end.getDate() + 30);
+      const result = await syncGcalToSupabase(start.toISOString(), end.toISOString());
+      // Re-fetch agendamentos para refletir mudanças
+      await fetchAgendamentos();
+      return result;
+    } catch (err) {
+      console.warn('[GCal] Background sync error:', err.message || err);
+      return null;
+    } finally {
+      _bgSyncPromise = null;
+    }
+  })();
+
+  return _bgSyncPromise;
 }

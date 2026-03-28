@@ -55,7 +55,7 @@ export function initNavigation() {
   });
 }
 
-export function navigateTo(page, updateHash = true) {
+export async function navigateTo(page, updateHash = true) {
   if (!PAGE_TITLES[page]) page = 'dashboard';
   State.currentPage = page;
 
@@ -74,8 +74,21 @@ export function navigateTo(page, updateHash = true) {
   const target = document.getElementById(`page-${page}`);
   if (target) target.classList.add('active');
 
+  // Loading indicator
+  if (target) target.classList.add('page-loading');
+
   // Carrega dados
-  if (pageLoader) pageLoader(page);
+  if (pageLoader) {
+    try {
+      await pageLoader(page);
+    } catch (e) {
+      console.error(`[Router] Error loading ${page}:`, e);
+    } finally {
+      if (target) target.classList.remove('page-loading');
+    }
+  } else {
+    if (target) target.classList.remove('page-loading');
+  }
 }
 
 // ── Sidebar Mobile ──

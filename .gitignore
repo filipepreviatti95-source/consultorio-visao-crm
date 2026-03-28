@@ -17,3 +17,4 @@ Thumbs.db
 
 # Workflow JSONs locais (contêm credenciais)
 *-workflow-*.json
+.vercel

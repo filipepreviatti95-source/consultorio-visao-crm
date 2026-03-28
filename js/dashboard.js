@@ -5,7 +5,7 @@
 
 import { State } from './config.js';
 import { esc, fmtHora, fmtData, tempoDesde, iniciais, waLink, STATUS_LABEL, toast, telefoneKey } from './utils.js';
-import { fetchPacientes, fetchAgendamentos, fetchConversasRecentes, syncGcalToSupabase, updateAgendamentoField, sincronizarGcal } from './api.js';
+import { fetchPacientes, fetchAgendamentos, fetchConversasRecentes, syncGcalToSupabase, updateAgendamentoField, sincronizarGcal, backgroundGcalSync } from './api.js';
 import { openChatPanel } from './chat.js';
 
 // ── Estado do filtro de período ──
@@ -278,7 +278,8 @@ export function initDashboardFilters() {
   document.getElementById('btn-sync-gcal')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget;
     btn.disabled = true;
-    btn.textContent = 'Sincronizando…';
+    btn.classList.add('btn-syncing');
+    updateSyncLabel('syncing');
     try {
       // Busca 60 dias: 30 passados + 30 futuros
       const start = new Date();
@@ -296,14 +297,34 @@ export function initDashboardFilters() {
         : `Tudo sincronizado (${result.total} eventos no Google)`;
       renderDashboardMetrics();
       renderDashboardAgenda();
+      updateSyncLabel('done');
       toast(msg, 'success', 4000);
     } catch (err) {
+      updateSyncLabel('error');
       toast(`Erro ao sincronizar: ${err.message}`, 'error', 5000);
     } finally {
       btn.disabled = false;
-      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:-2px;margin-right:3px"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg> Sincronizar`;
+      btn.classList.remove('btn-syncing');
     }
   });
+}
+
+// ── GCal Sync Label ──
+
+function updateSyncLabel(status) {
+  const el = document.getElementById('gcal-sync-label');
+  if (!el) return;
+  if (status === 'syncing') {
+    el.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin .8s linear infinite"><polyline points="23 4 23 10 17 10"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10"/></svg> Sincronizando…`;
+  } else if (status === 'error') {
+    el.textContent = 'Erro ao sincronizar';
+  } else {
+    const agora = new Date();
+    const h = String(agora.getHours()).padStart(2, '0');
+    const m = String(agora.getMinutes()).padStart(2, '0');
+    el.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="#00A86B" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> ${h}:${m}`;
+    el.title = 'Última sincronização com Google Agenda';
+  }
 }
 
 // ── Load ──
@@ -323,6 +344,20 @@ export async function loadDashboard() {
   renderDashboardMetrics();
   renderDashboardAgenda();
   renderDashboardFeed();
+
+  // Auto-sync com Google Calendar em background (não bloqueia a tela)
+  updateSyncLabel('syncing');
+  backgroundGcalSync().then(result => {
+    if (result && State.currentPage === 'dashboard') {
+      const changed = (result.criados || 0) + (result.atualizados || 0) + (result.removidos || 0);
+      if (changed > 0) {
+        renderDashboardMetrics();
+        renderDashboardAgenda();
+        toast(`GCal sincronizado (${changed} alteração${changed > 1 ? 'ões' : ''})`, 'info', 3000);
+      }
+    }
+    updateSyncLabel('done');
+  }).catch(() => updateSyncLabel('error'));
 
   // Polling fallback: atualiza feed de conversas a cada 30s (com lock anti-overlap)
   stopDashboardPolling();
