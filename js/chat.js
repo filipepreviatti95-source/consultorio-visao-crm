@@ -103,6 +103,31 @@ export function closeChatPanel() {
   State.currentChatPaciente = null;
 }
 
+// v6.7: Renderiza conteúdo da mensagem baseado no tipo de mídia
+function renderMsgContent(msg) {
+  const tipo = msg.tipo_midia || 'texto';
+
+  if (tipo === 'audio') {
+    const transcricao = msg.transcricao
+      ? `<div class="msg-transcription">${esc(msg.transcricao)}</div>`
+      : '<div class="msg-transcription msg-processing">Processando áudio...</div>';
+    return `<div class="msg-media-content"><span class="msg-audio-badge">🎵 Áudio</span>${transcricao}</div>`;
+  }
+
+  if (tipo === 'imagem') {
+    const img = msg.media_url
+      ? `<img class="msg-image" src="${esc(msg.media_url)}" alt="Imagem do paciente" loading="lazy" onclick="window.open('${esc(msg.media_url)}','_blank')" />`
+      : '<div class="msg-processing">Processando imagem...</div>';
+    const desc = msg.transcricao
+      ? `<div class="msg-image-desc">${esc(msg.transcricao)}</div>`
+      : '';
+    return `<div class="msg-media-content">${img}${desc}</div>`;
+  }
+
+  // texto normal (default)
+  return esc(msg.mensagem);
+}
+
 export function renderChatMessages(msgs) {
   const container = document.getElementById('chat-messages');
 
@@ -125,7 +150,7 @@ export function renderChatMessages(msgs) {
       <div class="msg-bubble-wrap ${wrapClass}" data-msg-id="${msg.id}">
         <div class="msg-sender-label">${fromMe ? label : 'Paciente'}</div>
         <div class="msg-bubble-row">
-          <div class="msg-bubble">${esc(msg.mensagem)}</div>
+          <div class="msg-bubble">${renderMsgContent(msg)}</div>
           <button class="btn-delete-msg" title="Apagar mensagem" data-msg-id="${msg.id}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
               <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>

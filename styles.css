@@ -1889,6 +1889,56 @@ input, select, textarea { font-family: inherit; }
 .chat-send-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 .chat-send-btn svg { width: 18px; height: 18px; }
 
+/* ── Chat Media Content (v6.7) ── */
+.msg-media-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.msg-audio-badge {
+  display: inline-block;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  width: fit-content;
+}
+.msg-transcription {
+  font-style: italic;
+  color: var(--text-secondary, #64748b);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+.msg-processing {
+  font-style: italic;
+  color: var(--text-muted, #94a3b8);
+  font-size: 0.8rem;
+  animation: pulse-text 1.5s infinite;
+}
+@keyframes pulse-text {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.msg-image {
+  max-width: 280px;
+  max-height: 300px;
+  border-radius: 8px;
+  cursor: pointer;
+  object-fit: cover;
+  transition: transform var(--trans-fast);
+}
+.msg-image:hover {
+  transform: scale(1.02);
+}
+.msg-image-desc {
+  color: var(--text-secondary, #64748b);
+  font-size: 0.8rem;
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
 /* ── Chat Empty State ── */
 .chat-empty {
   flex: 1;

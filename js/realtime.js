@@ -91,7 +91,28 @@ function handleConversaInsert(payload) {
   const { eventType } = payload;
   console.log('[Realtime] conversa event:', eventType, payload.new?.remetente, payload.new?.id);
 
-  // Só processa INSERTs (ignora updates)
+  // v6.7: Processa INSERTs e UPDATEs (UPDATE = mídia processada: transcrição/imagem)
+  if (eventType === 'UPDATE') {
+    const atualizada = payload.new;
+    // Atualiza registro existente no State.conversas
+    const idx = State.conversas.findIndex(c => c.id === atualizada.id);
+    if (idx >= 0) {
+      State.conversas[idx] = { ...State.conversas[idx], ...atualizada };
+    }
+    // Re-render chat se está aberto para este paciente
+    if (State.currentChatPaciente) {
+      const p = State.currentChatPaciente;
+      const pNums = (p.telefone || '').replace(/\D/g, '');
+      const novaNums = (atualizada.telefone || '').replace(/\D/g, '');
+      const mesmoId = atualizada.paciente_id === p.id;
+      const mesmoTel = novaNums && pNums && (novaNums.endsWith(pNums) || pNums.endsWith(novaNums));
+      if (mesmoId || mesmoTel) {
+        debouncedChatRefresh(p);
+      }
+    }
+    return;
+  }
+
   if (eventType !== 'INSERT') return;
 
   const nova = payload.new;
