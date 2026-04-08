@@ -589,12 +589,19 @@ export async function syncGcalToSupabase(dataInicio, dataFim) {
 
       if (existente) {
         // UPDATE: só atualiza data_hora e status do GCal
-        // PRESERVA: telefone e paciente_id do CRM (GCal não tem esses dados)
-        const mudou = existente.status !== ev.status ||
+        // PRESERVA: telefone, paciente_id e status terminais do CRM (GCal não carrega esses dados)
+        // STATUS_LOCAIS_CRM: estados que só existem no CRM e NÃO devem ser sobrescritos
+        // pelo forward sync (GCal Fetch mapeia todo evento não-cancelado como 'agendado',
+        // o que reverteria 'concluido'/'confirmado' marcados pelas recepcionistas)
+        const STATUS_LOCAIS_CRM = ['concluido', 'confirmado'];
+        const statusDeveAtualizar = existente.status !== ev.status
+          && !STATUS_LOCAIS_CRM.includes(existente.status);
+
+        const mudou = statusDeveAtualizar ||
           existente.data_hora?.slice(0, 16) !== ev.dataHora?.slice(0, 16);
 
         const updatePayload = {};
-        if (existente.status !== ev.status) updatePayload.status = ev.status;
+        if (statusDeveAtualizar) updatePayload.status = ev.status;
         if (existente.data_hora?.slice(0, 16) !== ev.dataHora?.slice(0, 16)) updatePayload.data_hora = ev.dataHora;
 
         // Se o agendamento não tem paciente_id, tenta vincular agora
