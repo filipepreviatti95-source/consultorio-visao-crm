@@ -9,15 +9,27 @@ import { normalizarTelefone, telefoneKey } from './utils.js';
 // ── Pacientes ──
 
 export async function fetchPacientes() {
-  const { data, error } = await db
-    .from('pacientes')
-    .select('*')
-    .order('created_at', { ascending: false });
-  if (error) {
-    console.error('[API] fetchPacientes error:', error.message);
-    return;
+  // Supabase tem hard cap de 1000 linhas por request.
+  // Base tem 2.7k+ pacientes, entao paginamos em batches de 1000.
+  const PAGE = 1000;
+  let all = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await db
+      .from('pacientes')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE - 1);
+    if (error) {
+      console.error('[API] fetchPacientes error:', error.message);
+      break;
+    }
+    if (!data || data.length === 0) break;
+    all = all.concat(data);
+    if (data.length < PAGE) break;
+    from += PAGE;
   }
-  State.pacientes = data || [];
+  State.pacientes = all;
 }
 
 export async function updatePacienteStatus(id, novoStatus) {
