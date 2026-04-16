@@ -121,6 +121,9 @@ function onLogout() {
   State.agendamentos = [];
   State.conversas = [];
   State.conversasRecentes = [];
+  State.todasConversas = [];
+  State.conversasFiltro = 'todas';
+  State.conversasBusca = '';
   State.currentChatPaciente = null;
   State.currentPage = 'dashboard';
   State.semanaOffset = 0;

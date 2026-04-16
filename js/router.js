@@ -9,6 +9,7 @@ const PAGE_TITLES = {
   dashboard:    'Dashboard',
   kanban:       'Kanban',
   pacientes:    'Pacientes',
+  conversas:    'Conversas',
   agendamentos: 'Agendamentos',
   treinamento:  'Treinamento do Bot',
 };

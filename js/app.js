@@ -28,6 +28,7 @@ import { loadKanban, renderKanban, setOpenModalPaciente } from './kanban.js';
 import { loadPacientes, renderPacientesTable, openModalPaciente, setupNovoPacienteBtns } from './pacientes.js';
 import { loadAgendamentos, renderAgendamentos, filtrarAgendamentosPorData, exportarAgendamentosCSV } from './agendamentos.js';
 import { loadTreinamento, initTreinamento } from './treinamento.js';
+import { loadConversas, reloadConversas } from './conversas.js';
 
 // ── Callback: após login bem-sucedido ──
 
@@ -81,6 +82,7 @@ setPageLoader(async (page) => {
     case 'dashboard':    await loadDashboard();    break;
     case 'kanban':       await loadKanban();       break;
     case 'pacientes':    await loadPacientes();    break;
+    case 'conversas':    await loadConversas();    break;
     case 'agendamentos': await loadAgendamentos(); break;
     case 'treinamento':  await loadTreinamento();  break;
   }
@@ -109,6 +111,7 @@ setOnDataChange(async (tabela) => {
     try {
       await fetchConversasRecentes();
       renderDashboardFeed(); // Atualiza sempre (DOM só muda se elementos existem)
+      if (page === 'conversas') await reloadConversas();
     } catch (e) {
       console.warn('Erro ao atualizar feed de conversas:', e);
     }

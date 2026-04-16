@@ -117,12 +117,13 @@ export async function deleteAgendamento(id) {
 // ── Conversas ──
 
 export async function fetchConversasRecentes() {
+  // Inclui TODOS os remetentes (paciente, assistente, humano) — disparos manuais
+  // do CRM (remetente='humano') também devem aparecer nas Últimas Conversas
   const { data, error } = await db
     .from('conversas')
     .select('*, pacientes(nome, telefone)')
-    .eq('remetente', 'paciente')
     .order('created_at', { ascending: false })
-    .limit(60);
+    .limit(300);
   if (error) {
     console.error('[API] fetchConversasRecentes error:', error.message);
     return;
@@ -155,6 +156,54 @@ export async function fetchConversasRecentes() {
     if (porChave.size >= 12) break;
   }
   State.conversasRecentes = Array.from(porChave.values());
+}
+
+// Busca TODAS as conversas agrupadas por contato (telefone) — usada na aba Conversas
+// Retorna lista com última msg, contagem, flag de resposta do paciente, etc
+export async function fetchTodasConversas({ limit = 500 } = {}) {
+  const { data, error } = await db
+    .from('conversas')
+    .select('id, paciente_id, telefone, remetente, mensagem, tipo_midia, created_at, pacientes(nome, telefone)')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.error('[API] fetchTodasConversas error:', error.message);
+    State.todasConversas = [];
+    return;
+  }
+
+  // Agrupa por telefoneKey
+  const porChave = new Map();
+  for (const conv of (data || [])) {
+    const tel = conv.pacientes?.telefone || conv.telefone;
+    if (!tel) continue;
+    const chave = telefoneKey(tel);
+
+    if (!porChave.has(chave)) {
+      porChave.set(chave, {
+        chave,
+        telefone: tel,
+        paciente_id: conv.paciente_id || null,
+        nome: conv.pacientes?.nome || null,
+        ultimaMsg: conv,
+        total: 1,
+        temRespostaPaciente: conv.remetente === 'paciente',
+        temEnvioCrm: conv.remetente === 'humano',
+        temBot: conv.remetente === 'assistente',
+      });
+    } else {
+      const agg = porChave.get(chave);
+      agg.total += 1;
+      if (conv.remetente === 'paciente') agg.temRespostaPaciente = true;
+      if (conv.remetente === 'humano') agg.temEnvioCrm = true;
+      if (conv.remetente === 'assistente') agg.temBot = true;
+      // Completar nome/paciente_id se ainda faltavam
+      if (!agg.nome && conv.pacientes?.nome) agg.nome = conv.pacientes.nome;
+      if (!agg.paciente_id && conv.paciente_id) agg.paciente_id = conv.paciente_id;
+    }
+  }
+
+  State.todasConversas = Array.from(porChave.values());
 }
 
 export async function fetchConversasPaciente(pacienteId, telefone) {

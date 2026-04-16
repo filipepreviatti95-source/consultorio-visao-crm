@@ -22,6 +22,9 @@ export const State = {
   agendamentos: [],
   conversas: [],
   conversasRecentes: [],
+  todasConversas: [],
+  conversasFiltro: 'todas', // todas | com-resposta | so-enviadas | bot
+  conversasBusca: '',
   currentChatPaciente: null,
   darkMode: localStorage.getItem('darkMode') === 'true',
   semanaOffset: 0,
